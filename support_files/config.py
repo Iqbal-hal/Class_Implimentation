@@ -1,4 +1,4 @@
-# =================================
+﻿# =================================
 # config.py - Full Optimized Version
 # =================================
 from importlib import import_module

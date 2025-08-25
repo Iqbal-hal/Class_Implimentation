@@ -1,4 +1,4 @@
-# TradeScanner.py
+﻿# TradeScanner.py
 import pandas as pd
 import support_files.config as con
 from FilteringBacktesting import FilteringAndBacktesting  

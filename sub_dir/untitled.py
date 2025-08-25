@@ -1,4 +1,4 @@
-
+﻿
 import tkinter as tk
 from tkinter import ttk
 import pandas as pd
@@ -255,7 +255,7 @@ def iterate_list(filtered_ohlc_gain_df):
     """
     This function iterates through the stocks and updates the plot.
     It builds a dynamic layout using GridSpec for the enabled plots.
-    Now it also adds a horizontal slider that lets you “scroll” through the data.
+    Now it also adds a horizontal slider that lets you â€œscrollâ€ through the data.
     """
     global main_plot_enabled, bollinger_enabled, ema_9_enabled, ema_20_enabled, pe_enabled, close_price_enabled, axv_line_enabled
     global macd_enabled, rsi_enabled, atr_enabled, annotation_text_enabled

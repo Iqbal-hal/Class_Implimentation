@@ -54,7 +54,7 @@ class FilteringAndBacktesting:
 
     # --------------------- BACKTESTING METHODS ---------------------
     def calculate_fee(self, trade_value):
-        """Returns the broker fee: â‚¹20 or 2.5% of trade value (whichever is lower)."""
+        """Returns the broker fee: ₹20 or 2.5% of trade value (whichever is lower)."""
         fee_percent = 0.025 * trade_value
         fixed_fee = 20.0
         return min(fixed_fee, fee_percent)

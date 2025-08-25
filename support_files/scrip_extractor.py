@@ -1,4 +1,4 @@
-def scrip_extractor(master_df):
+﻿def scrip_extractor(master_df):
     '''
     master_df contains multiple scrips which is concateneated already.The function extract each scrips dataframe from the master_df.
 

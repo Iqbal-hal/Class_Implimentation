@@ -1,4 +1,4 @@
-
+﻿
 import talib
 import numpy as np
 def compute_indicators(scrip_df):

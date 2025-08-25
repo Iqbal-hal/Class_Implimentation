@@ -1,4 +1,4 @@
-
+﻿
 #===================================================================================================
 # Description: This file contains the event handler for the scroll event in matplotlib.
 # scroll_handler.py

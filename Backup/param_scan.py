@@ -1,4 +1,4 @@
-# param_scan.py
+﻿# param_scan.py
 import pandas as pd
 import support_files.config as config
 import backtester as bt  

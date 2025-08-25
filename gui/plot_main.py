@@ -1,4 +1,4 @@
-
+﻿
 # ===========================================================
 # plot_main.py
 # Plotting functions for the main chart

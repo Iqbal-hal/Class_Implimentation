@@ -1,4 +1,4 @@
-import tkinter as tk
+﻿import tkinter as tk
 
 class FundamentalsWindow:
     def __init__(self, parent, initial_data=None, initial_scrip=""):
