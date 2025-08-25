@@ -43,11 +43,16 @@ def update_config_values(lines, updates):
             if val is None:
                 out.append(f"{key} = None")
             elif isinstance(val, str):
-                # keep quotes if string already quoted, else add single quotes
-                if val.startswith(("'", '"')) and val.endswith(("'", '"')):
-                    out.append(f"{key} = {val}")
+                # Trim surrounding whitespace first
+                trimmed = val.strip()
+                # If the trimmed value is quoted with a matching pair of single or double quotes,
+                # accept it as-is (preserve existing quoting). Only accept if len>=2 and first==last and both quotes
+                if len(trimmed) >= 2 and ((trimmed[0] == trimmed[-1]) and trimmed[0] in ("'", '"')):
+                    out.append(f"{key} = {trimmed}")
                 else:
-                    out.append(f"{key} = '{val}'")
+                    # Wrap in single quotes and escape any internal single quotes
+                    escaped = trimmed.replace("'", "\\'")
+                    out.append(f"{key} = '{escaped}'")
             else:
                 out.append(f"{key} = {repr(val)}")
         else:
