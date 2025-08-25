@@ -1,6 +1,7 @@
 ﻿import pandas as pd
 from datetime import datetime
 import os
+from pathlib import Path
 
 current_dir = os.getcwd()
 current_datetime = datetime.now()
@@ -109,10 +110,43 @@ def convert_pkl_to_csv(filename_csv, filename_pkl, _order):
 
 
 def change_cwd(sd):
-    # print("Current Directory:", current_dir)
-    sub_dir = os.path.join(current_dir, sd)
-    os.chdir(sub_dir)
-    # print("Changed to Subdirectory:", os.getcwd())
+    """
+    Change working directory to the given subdirectory name/path.
+    Behavior:
+      - If `sd` is an absolute path and exists, chdir to it.
+      - Else try to chdir relative to the current working directory.
+      - Else fall back to chdir relative to this package directory (recommended for project-local folders).
+    """
+    # 1) absolute path
+    try:
+        if os.path.isabs(sd) and os.path.isdir(sd):
+            os.chdir(sd)
+            return
+    except Exception:
+        pass
+
+    # 2) try relative to current working directory
+    try:
+        os.chdir(sd)
+        return
+    except Exception:
+        pass
+
+    # 3) fallback: resolve relative to this module's package directory
+    pkg_dir = Path(__file__).resolve().parent
+    target = pkg_dir / sd
+    if target.exists():
+        os.chdir(str(target))
+        return
+
+    # final attempt: try to create the directory under package and chdir into it
+    try:
+        target.mkdir(parents=True, exist_ok=True)
+        os.chdir(str(target))
+        return
+    except Exception as e:
+        # Let the original exception surface if we cannot change directory
+        raise
 
 
 def get_cwd():

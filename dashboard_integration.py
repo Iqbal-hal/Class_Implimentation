@@ -656,7 +656,12 @@ class TradingDashboard:
             html_content = self.create_dashboard_html(include_data=True)
             
             # Save to file
-            # ensure exports are written into the output_data folder when called from backtest
+            # ensure exports are written into the output_data folder (relative to this package)
+            try:
+                pkg_dir = Path(__file__).resolve().parent
+                os.chdir(pkg_dir)
+            except Exception:
+                pass
             out_dir = Path('output_data')
             out_dir.mkdir(parents=True, exist_ok=True)
             file_path = out_dir / filename
@@ -682,6 +687,11 @@ class TradingDashboard:
         """
         try:
             # write exports under output_data/export_dir for consistency with other outputs
+            try:
+                pkg_dir = Path(__file__).resolve().parent
+                os.chdir(pkg_dir)
+            except Exception:
+                pass
             base_out = Path('output_data')
             base_out.mkdir(exist_ok=True)
             export_path = base_out / export_dir

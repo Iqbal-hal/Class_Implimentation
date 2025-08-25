@@ -13,6 +13,7 @@ os.environ.setdefault('PYTHONIOENCODING', 'utf-8')
 os.environ.setdefault('PYTHONUTF8', '1')
 
 import os
+from pathlib import Path
 import support_files.updated_config as config
 import pandas as pd
 import numpy as np
@@ -1011,6 +1012,13 @@ if __name__ == '__main__':
     print("ALGORITHMIC TRADING PORTFOLIO MANAGEMENT SYSTEM".center(80))
     print("=" * 80)
     
+    # Ensure working directory is this package folder so relative folders like 'input_data'/'output_data' work
+    pkg_dir = Path(__file__).resolve().parent
+    try:
+        os.chdir(pkg_dir)
+    except Exception:
+        pass
+
     # Load market data (from input_data)
     master_df = fio.read_csv_to_df('Nif50_5y_1w.csv', 'A', 'input_data')
     

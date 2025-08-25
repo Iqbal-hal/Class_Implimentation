@@ -50,7 +50,7 @@ FILTER_RECOMMENDATIONS = {
 }
 
 # Active configuration parameters - Updated with enhanced filter
-ACTIVE_FILTER = 'filter_ensemble_weighted'
+ACTIVE_FILTER = 'filter_momentum'
 FILTER_ENABLED = True
 LOGGING_ENABLED = True
 ENABLE_DETAILED_LOGGING = True

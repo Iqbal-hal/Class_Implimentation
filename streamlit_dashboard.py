@@ -1,4 +1,5 @@
 ﻿import sys
+import os
 from pathlib import Path
 
 # ensure project root is on sys.path (DO NOT add the Class_Implimentation folder itself)
@@ -233,9 +234,11 @@ if st.button("Run Backtest Now") or (mode=="Edit, Save & Run Backtest" and run_b
     try:
         # minimal integration: import the class and run
         from Enhanced_stock_trading_V8 import FilteringAndBacktesting
-        # read inputs from input_data, ensure folder exists
-        repo_root = Path(__file__).resolve().parent.parent
-        input_dir = repo_root / 'input_data'
+        # read inputs from input_data inside this package directory (do not hardcode repo root)
+        repo_dir = Path(__file__).resolve().parent
+        # ensure subsequent relative calls that expect 'input_data' refer to this folder
+        os.chdir(repo_dir)
+        input_dir = repo_dir / 'input_data'
         if not input_dir.exists():
             st.error(f"Input folder not found: {input_dir}. Create and place your CSVs there.")
             raise FileNotFoundError(f"Input folder not found: {input_dir}")

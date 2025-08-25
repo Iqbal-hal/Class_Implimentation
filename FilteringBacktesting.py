@@ -3,6 +3,8 @@ import pandas as pd
 import numpy as np
 from support_files.scrip_extractor import scrip_extractor, scripdf_extractor
 import support_files.compute_indicators_helper as cmp  # For computing technical indicators
+import os
+from pathlib import Path
 
 # Trade constraint constants
 MIN_PROFIT_PERCENTAGE = config.MIN_PROFIT_PERCENTAGE
@@ -315,14 +317,20 @@ if __name__ == '__main__':
     import sys
     from support_files.dual_logger import DualLogger     
     import support_files.File_IO as fio
+    # Ensure working directory is this package folder so relative folders like 'input_data'/'output_data' work
+    pkg_dir = Path(__file__).resolve().parent
+    try:
+        os.chdir(pkg_dir)
+    except Exception:
+        pass
 
     # Read the master dataframe (concatenated OHLC data)
-    # read inputs from input_data folder
+    # read inputs from input_data folder (relative to package dir)
     master_df = fio.read_csv_to_df('Nif50_5y_1w.csv', 'A', 'input_data')
     
     # Create an instance of FilteringAndBacktesting and run the full process
     fab = FilteringAndBacktesting(initial_cash=10000.0)
-    # ensure all generated outputs go into output_data
+    # ensure all generated outputs go into output_data (relative to package dir)
     fio.change_cwd('output_data')
     sys.stdout = DualLogger("portfolio_trading_log.txt")
     
