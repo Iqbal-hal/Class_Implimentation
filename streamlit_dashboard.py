@@ -152,7 +152,19 @@ with st.sidebar:
         if selected_filter != "<use market condition>":
             active = selected_filter
         else:
-            active = cfg.get_recommended_filters(market_condition)[0] if market_condition != "none" else getattr(cfg, 'ACTIVE_FILTER', 'filter_ensemble_weighted')
+            # Safely obtain recommended filters from cfg (cfg may be SimpleNamespace without the method)
+            rf = getattr(cfg, 'get_recommended_filters', None)
+            try:
+                if callable(rf) and market_condition != "none":
+                    recs = rf(market_condition) or []
+                else:
+                    recs = []
+            except Exception:
+                recs = []
+            if recs:
+                active = recs[0]
+            else:
+                active = getattr(cfg, 'ACTIVE_FILTER', 'filter_ensemble_weighted')
 
         updates = {
             'ACTIVE_FILTER': active,
