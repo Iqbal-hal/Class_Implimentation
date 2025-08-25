@@ -1,4 +1,4 @@
-﻿import sys, io, os
+import sys, io, os
 try:
     # Preferred (Python 3.7+): ensure stdout/stderr use UTF-8
     sys.stdout.reconfigure(encoding='utf-8', errors='replace')
@@ -105,7 +105,7 @@ class FilteringAndBacktesting:
         print(f"\n" + "="*80)
         print(f"PORTFOLIO ALLOCATION STRATEGY".center(80))
         print(f"="*80)
-        print(f"Total Capital Available: â‚¹{self.initial_cash:,.2f}")
+        print(f"Total Capital Available: ₹{self.initial_cash:,.2f}")
         print(f"Number of Securities Selected: {len(scrips)}")
         print(f"Allocation Method: Risk-Weighted Dynamic Allocation")
         
@@ -189,11 +189,11 @@ class FilteringAndBacktesting:
             allocation_amount = self.initial_cash * normalized_weights[scrip]
             self.stock_allocations[scrip] = allocation_amount
             
-            print(f"{scrip:<15} {score:<8.1f} {allocation_pct:<9.2f}% â‚¹{allocation_amount:<14,.0f} #{i+1:<6}")
+            print(f"{scrip:<15} {score:<8.1f} {allocation_pct:<9.2f}% ₹{allocation_amount:<14,.0f} #{i+1:<6}")
         
         print("-" * 65)
         total_alloc = sum(self.stock_allocations.values())
-        print(f"{'TOTAL':<15} {'':<8} {'100.0%':<10} â‚¹{total_alloc:<14,.0f}")
+        print(f"{'TOTAL':<15} {'':<8} {'100.0%':<10} ₹{total_alloc:<14,.0f}")
         
         # Print detailed scoring breakdown for top 3 stocks (only once)
         if not self._detailed_print_shown:
@@ -207,7 +207,7 @@ class FilteringAndBacktesting:
                 print(f"  Signal Quality:     {details['signal_score']:.1f}/100")
                 print(f"  Price Momentum:     {details['momentum_score']:.1f}/100 ({details['price_momentum']:.2f}% change)")
                 print(f"  Risk Assessment:    {details['volatility_score']:.1f}/100")
-                print(f"  Current Market Price: â‚¹{details['current_price']:.2f}")
+                print(f"  Current Market Price: ₹{details['current_price']:.2f}")
                 print(f"  RSI Level:          {details['rsi']:.1f}")
                 print(f"  Trading Signals:    {details['buy_signals']} Buy, {details['sell_signals']} Sell")
             # mark detailed calculations as shown so later per-stock runs remain concise
@@ -268,7 +268,7 @@ class FilteringAndBacktesting:
 
     # --------------------- BACKTESTING METHODS ---------------------
     def calculate_fee(self, trade_value):
-        """Returns the broker fee: â‚¹20 or 2.5% of trade value (whichever is lower)."""
+        """Returns the broker fee: ₹20 or 2.5% of trade value (whichever is lower)."""
         fee_percent = 0.025 * trade_value
         fixed_fee = 20.0
         return min(fixed_fee, fee_percent)
@@ -292,14 +292,14 @@ class FilteringAndBacktesting:
         if not self._detailed_print_shown:
             print("Capital Allocation Details:")
             if scrip in self.stock_allocations:
-                print(f"  Allocated Capital: â‚¹{self.stock_allocations[scrip]:,.2f}")
+                print(f"  Allocated Capital: ₹{self.stock_allocations[scrip]:,.2f}")
             else:
                 fallback = self.initial_cash / len(self.stock_allocations) if self.stock_allocations else self.initial_cash
-                print(f"  Default Allocation: â‚¹{fallback:,.2f} (equal weight fallback)")
-            print(f"  Starting Cash Available: â‚¹{allocated_capital:,.2f}")
+                print(f"  Default Allocation: ₹{fallback:,.2f} (equal weight fallback)")
+            print(f"  Starting Cash Available: ₹{allocated_capital:,.2f}")
         else:
             allocation_pct = (allocated_capital / self.initial_cash) * 100.0 if self.initial_cash else 0.0
-            print(f"Allocated Capital: â‚¹{allocated_capital:,.2f} ({allocation_pct:.1f}% of portfolio)")
+            print(f"Allocated Capital: ₹{allocated_capital:,.2f} ({allocation_pct:.1f}% of portfolio)")
 
         position_qty = 0
         portfolio_values = []
@@ -310,15 +310,15 @@ class FilteringAndBacktesting:
         transactions = []
 
         if 'P/E' in df_bt.columns and 'EPS' in df_bt.columns:
-            print(f"Fundamental Data - P/E: {df_bt['P/E'].iloc[-1]:.2f} | EPS: â‚¹{df_bt['EPS'].iloc[-1]:.2f}")
+            print(f"Fundamental Data - P/E: {df_bt['P/E'].iloc[-1]:.2f} | EPS: ₹{df_bt['EPS'].iloc[-1]:.2f}")
 
         if scrip in self.stock_scores:
             score_info = self.stock_scores[scrip]
             print(f"Investment Score: {score_info['composite_score']:.1f}/100")
-            print(f"  â€¢ Technical Analysis: {score_info['technical_score']:.1f}/100")
-            print(f"  â€¢ Signal Quality: {score_info['signal_score']:.1f}/100") 
-            print(f"  â€¢ Price Momentum: {score_info['momentum_score']:.1f}/100")
-            print(f"  â€¢ Risk Assessment: {score_info['volatility_score']:.1f}/100")
+            print(f"  • Technical Analysis: {score_info['technical_score']:.1f}/100")
+            print(f"  • Signal Quality: {score_info['signal_score']:.1f}/100") 
+            print(f"  • Price Momentum: {score_info['momentum_score']:.1f}/100")
+            print(f"  • Risk Assessment: {score_info['volatility_score']:.1f}/100")
             allocation_pct = (allocated_capital / self.initial_cash) * 100.0 if self.initial_cash else 0.0
             print(f"Portfolio Weight: {allocation_pct:.1f}%")
 
@@ -362,19 +362,19 @@ class FilteringAndBacktesting:
                         })
 
                         if not self._detailed_print_shown:
-                            print(f"\nðŸ“ˆ LONG ENTRY - {idx:%d-%b-%Y}")
+                            print(f"\n📈 LONG ENTRY - {idx:%d-%b-%Y}")
                             print(f"   Security: {stock_name}")
-                            print(f"   Entry Price: â‚¹{market_price:.2f}")
+                            print(f"   Entry Price: ₹{market_price:.2f}")
                             print(f"   Quantity: {position_qty:,} shares")
-                            print(f"   Gross Investment: â‚¹{gross_cost:,.2f}")
-                            print(f"   Brokerage: â‚¹{brokerage:.2f}")
-                            print(f"   Total Investment: â‚¹{total_investment:,.2f}")
-                            print(f"   Cash Remaining: â‚¹{available_cash:,.2f}")
+                            print(f"   Gross Investment: ₹{gross_cost:,.2f}")
+                            print(f"   Brokerage: ₹{brokerage:.2f}")
+                            print(f"   Total Investment: ₹{total_investment:,.2f}")
+                            print(f"   Cash Remaining: ₹{available_cash:,.2f}")
                         else:
-                            print(f"ðŸ“ˆ {idx:%d-%b-%Y} | LONG ENTRY | {position_qty:,} shares @ â‚¹{market_price:.2f} | Cash: â‚¹{available_cash:,.0f}")
+                            print(f"📈 {idx:%d-%b-%Y} | LONG ENTRY | {position_qty:,} shares @ ₹{market_price:.2f} | Cash: ₹{available_cash:,.0f}")
 
                 else:
-                    print(f"âš ï¸  {idx:%d-%b-%Y} | Insufficient funds for {stock_name} @ â‚¹{market_price:.2f}")
+                    print(f"⚠️ {idx:%d-%b-%Y} | Insufficient funds for {stock_name} @ ₹{market_price:.2f}")
 
             # SELL LOGIC
             elif sell_signal.loc[idx] and position_qty > 0:
@@ -400,18 +400,18 @@ class FilteringAndBacktesting:
                     trade_status = 'LONG EXIT'
 
                     if not self._detailed_print_shown:
-                        print(f"\nðŸ“‰ LONG EXIT - {idx:%d-%b-%Y}")
+                        print(f"\n📉 LONG EXIT - {idx:%d-%b-%Y}")
                         print(f"   Security: {stock_name}")
-                        print(f"   Exit Price: â‚¹{market_price:.2f}")
+                        print(f"   Exit Price: ₹{market_price:.2f}")
                         print(f"   Quantity: {position_qty:,} shares")
                         print(f"   Holding Period: {holding_period} days")
-                        print(f"   Gross Proceeds: â‚¹{gross_proceeds:,.2f}")
-                        print(f"   Brokerage: â‚¹{brokerage:.2f}")
-                        print(f"   Net Proceeds: â‚¹{net_proceeds:,.2f}")
-                        print(f"   Realized P&L: â‚¹{realized_pnl:,.2f} ({realized_pnl_pct:+.2f}%)")
-                        print(f"   Total Cash: â‚¹{available_cash:,.2f}")
+                        print(f"   Gross Proceeds: ₹{gross_proceeds:,.2f}")
+                        print(f"   Brokerage: ₹{brokerage:.2f}")
+                        print(f"   Net Proceeds: ₹{net_proceeds:,.2f}")
+                        print(f"   Realized P&L: ₹{realized_pnl:,.2f} ({realized_pnl_pct:+.2f}%)")
+                        print(f"   Total Cash: ₹{available_cash:,.2f}")
                     else:
-                        print(f"ðŸ“‰ {idx:%d-%b-%Y} | LONG EXIT | {position_qty:,} shares @ â‚¹{market_price:.2f} | P&L: â‚¹{realized_pnl:+.0f} ({realized_pnl_pct:+.1f}%) | Cash: â‚¹{available_cash:,.0f}")
+                        print(f"📉 {idx:%d-%b-%Y} | LONG EXIT | {position_qty:,} shares @ ₹{market_price:.2f} | P&L: ₹{realized_pnl:+.0f} ({realized_pnl_pct:+.1f}%) | Cash: ₹{available_cash:,.0f}")
 
                     transactions.append({
                         'Date': idx,
@@ -432,7 +432,7 @@ class FilteringAndBacktesting:
                     entry_date = None
                     entry_price = None
                 else:
-                    print(f"â³ {idx:%d-%b-%Y} | Position held | Days: {holding_period} | Unrealized P&L: {unrealized_pnl_pct:+.1f}% | Conditions not met")
+                    print(f"⏳ {idx:%d-%b-%Y} | Position held | Days: {holding_period} | Unrealized P&L: {unrealized_pnl_pct:+.1f}% | Conditions not met")
 
             # Calculate current portfolio value for this stock
             current_position_value = position_qty * market_price
@@ -463,12 +463,12 @@ class FilteringAndBacktesting:
         print(f"\n" + "-"*70)
         print(f"POSITION SUMMARY as of {last_idx:%d-%b-%Y}")
         print(f"-"*70)
-        print(f"Current Market Price: â‚¹{current_market_price:.2f}")
+        print(f"Current Market Price: ₹{current_market_price:.2f}")
         print(f"Position: {final_position:,} shares")
-        print(f"Position Value: â‚¹{final_position_value:,.2f}")
-        print(f"Available Cash: â‚¹{final_cash:,.2f}")
-        print(f"Total Portfolio Value: â‚¹{final_portfolio_value:,.2f}")
-        print(f"Total Return: â‚¹{total_return_amount:+,.2f} ({total_return_pct:+.2f}%)")
+        print(f"Position Value: ₹{final_position_value:,.2f}")
+        print(f"Available Cash: ₹{final_cash:,.2f}")
+        print(f"Total Portfolio Value: ₹{final_portfolio_value:,.2f}")
+        print(f"Total Return: ₹{total_return_amount:+,.2f} ({total_return_pct:+.2f}%)")
 
         df_bt['Final_Value'] = np.nan
         df_bt['Total_Return'] = np.nan
@@ -486,10 +486,10 @@ class FilteringAndBacktesting:
         # Update global portfolio value
         prev_portfolio = self.portfolio_value
         print(f"\nGLOBAL PORTFOLIO UPDATE:")
-        print(f"Previous Portfolio Value: â‚¹{prev_portfolio:,.2f}")
+        print(f"Previous Portfolio Value: ₹{prev_portfolio:,.2f}")
         self.portfolio_value += final_portfolio_value
-        print(f"Added from {scrip}: â‚¹{final_portfolio_value:,.2f}")
-        print(f"New Portfolio Value: â‚¹{self.portfolio_value:,.2f}")
+        print(f"Added from {scrip}: ₹{final_portfolio_value:,.2f}")
+        print(f"New Portfolio Value: ₹{self.portfolio_value:,.2f}")
         global_return = (self.portfolio_value - self.initial_cash) * 100.0 / self.initial_cash if self.initial_cash else 0.0
         print(f"Overall Portfolio Return: {global_return:+.2f}%")
 
@@ -635,16 +635,16 @@ class FilteringAndBacktesting:
             cash = final_cash_map.get(scrip, 0.0)
             unrealized_market_value += market_value
             
-            print(f"{scrip:<15} {shares:<10,} â‚¹{market_price:<11.2f} â‚¹{market_value:<14,.0f} â‚¹{cash:<11,.0f}")
+            print(f"{scrip:<15} {shares:<10,} ₹{market_price:<11.2f} ₹{market_value:<14,.0f} ₹{cash:<11,.0f}")
 
         print("-" * 80)
-        print(f"{'TOTALS':<15} {'':<10} {'':<12} â‚¹{unrealized_market_value:<14,.0f} â‚¹{total_cash:<11,.0f}")
+        print(f"{'TOTALS':<15} {'':<10} {'':<12} ₹{unrealized_market_value:<14,.0f} ₹{total_cash:<11,.0f}")
 
         total_portfolio_value = total_cash + unrealized_market_value
         print(f"\nPORTFOLIO VALUATION SUMMARY:")
-        print(f"Cash Balance: â‚¹{total_cash:,.2f}")
-        print(f"Unrealized Market Value: â‚¹{unrealized_market_value:,.2f}")
-        print(f"Total Portfolio Value: â‚¹{total_portfolio_value:,.2f}")
+        print(f"Cash Balance: ₹{total_cash:,.2f}")
+        print(f"Unrealized Market Value: ₹{unrealized_market_value:,.2f}")
+        print(f"Total Portfolio Value: ₹{total_portfolio_value:,.2f}")
 
         # Calculate Realized P&L using transaction history (FIFO method)
         realized_pnl = 0.0
@@ -695,7 +695,7 @@ class FilteringAndBacktesting:
                             'avg_price': price,
                             'total_cost': total_cost + brokerage
                         })
-                        print(f"{stock:<15} {'LONG ENTRY':<12} {quantity:<10,} â‚¹{price:<9.2f} {'-':<15}")
+                        print(f"{stock:<15} {'LONG ENTRY':<12} {quantity:<10,} ₹{price:<9.2f} {'-':<15}")
                     
                     elif event_type == 'SELL' and quantity > 0:
                         gross_proceeds = float(transaction.get('Revenue', 0.0) or 0.0)
@@ -734,15 +734,15 @@ class FilteringAndBacktesting:
                         stock_realized_pnl += trade_pnl
                         realized_pnl += trade_pnl
                         
-                        print(f"{stock:<15} {'LONG EXIT':<12} {quantity:<10,} â‚¹{price:<9.2f} â‚¹{trade_pnl:<14,.0f}")
+                        print(f"{stock:<15} {'LONG EXIT':<12} {quantity:<10,} ₹{price:<9.2f} ₹{trade_pnl:<14,.0f}")
                 
                 if stock_realized_pnl != 0:
-                    print(f"{stock + ' TOTAL':<15} {'':<12} {'':<10} {'':<10} â‚¹{stock_realized_pnl:<14,.0f}")
+                    print(f"{stock + ' TOTAL':<15} {'':<12} {'':<10} {'':<10} ₹{stock_realized_pnl:<14,.0f}")
                     print("-" * 70)
         else:
             print("No completed transactions found.")
         
-        print(f"TOTAL REALIZED P&L: â‚¹{realized_pnl:,.2f}")
+        print(f"TOTAL REALIZED P&L: ₹{realized_pnl:,.2f}")
 
         # Calculate CAGR and other metrics
         print(f"\n" + "="*60)
@@ -822,16 +822,16 @@ class FilteringAndBacktesting:
         print(f"\nPERFORMANCE SUMMARY:")
         print(f"{'Metric':<30} {'Value':<20}")
         print("-" * 50)
-        print(f"{'Initial Capital':<30} â‚¹{initial_capital:>15,.2f}")
-        print(f"{'Final Portfolio Value':<30} â‚¹{total_portfolio_value:>15,.2f}")
-        print(f"{'Total Return (Amount)':<30} â‚¹{total_return_amount:>15,.2f}")
+        print(f"{'Initial Capital':<30} ₹{initial_capital:>15,.2f}")
+        print(f"{'Final Portfolio Value':<30} ₹{total_portfolio_value:>15,.2f}")
+        print(f"{'Total Return (Amount)':<30} ₹{total_return_amount:>15,.2f}")
         print(f"{'Total Return (%)':<30} {total_return_pct:>15.2f}%")
-        print(f"{'Realized P&L':<30} â‚¹{realized_pnl:>15,.2f}")
-        print(f"{'Unrealized P&L':<30} â‚¹{unrealized_pnl:>15,.2f}")
+        print(f"{'Realized P&L':<30} ₹{realized_pnl:>15,.2f}")
+        print(f"{'Unrealized P&L':<30} ₹{unrealized_pnl:>15,.2f}")
         if cagr is not None:
             print(f"{'CAGR':<30} {cagr*100:>15.2f}%")
-        print(f"{'Capital Deployed':<30} â‚¹{capital_deployed:>15,.2f}")
-        print(f"{'Total Brokerage':<30} â‚¹{total_brokerage:>15,.2f}")
+        print(f"{'Capital Deployed':<30} ₹{capital_deployed:>15,.2f}")
+        print(f"{'Total Brokerage':<30} ₹{total_brokerage:>15,.2f}")
         print(f"{'Number of Positions':<30} {num_positions:>15}")
         print(f"{'Buy Transactions':<30} {buy_transactions:>15}")
         print(f"{'Sell Transactions':<30} {sell_transactions:>15}")
@@ -941,25 +941,25 @@ class FilteringAndBacktesting:
             # Summary only for quick reference
             global_summary_df.to_excel(writer, sheet_name="Quick_Summary", index=False)
 
-        print("âœ… Portfolio Performance Report exported to 'portfolio_performance_report.xlsx'")
+        print("✅ Portfolio Performance Report exported to 'portfolio_performance_report.xlsx'")
         
         if not backtested_transactions_df.empty:
             backtested_transactions_df.to_excel('detailed_transactions.xlsx', index=False)
-            print("âœ… Detailed transactions exported to 'detailed_transactions.xlsx'")
+            print("✅ Detailed transactions exported to 'detailed_transactions.xlsx'")
 
         print(f"\n" + "="*80)
         print("FINAL PORTFOLIO RESULTS".center(80))
         print("="*80)
-        print(f"ðŸŽ¯ Strategy: {config.ACTIVE_FILTER}")
-        print(f"ðŸ’° Initial Investment: â‚¹{initial_capital:,.2f}")
-        print(f"ðŸ’Ž Current Portfolio Value: â‚¹{total_portfolio_value:,.2f}")
-        print(f"ðŸ“ˆ Total Return: â‚¹{total_return_amount:+,.2f} ({total_return_pct:+.2f}%)")
-        print(f"ðŸ’µ Realized Gains: â‚¹{realized_pnl:,.2f}")
-        print(f"ðŸ’¹ Unrealized Gains: â‚¹{unrealized_pnl:,.2f}")
+        print(f"🎯 Strategy: {config.ACTIVE_FILTER}")
+        print(f"💰 Initial Investment: ₹{initial_capital:,.2f}")
+        print(f"💎 Current Portfolio Value: ₹{total_portfolio_value:,.2f}")
+        print(f"📈 Total Return: ₹{total_return_amount:+,.2f} ({total_return_pct:+.2f}%)")
+        print(f"💵 Realized Gains: ₹{realized_pnl:,.2f}")
+        print(f"💹 Unrealized Gains: ₹{unrealized_pnl:,.2f}")
         if cagr is not None:
-            print(f"ðŸ“Š CAGR: {cagr*100:.2f}%")
-        print(f"ðŸ¢ Active Positions: {sum(1 for pos in final_position_map.values() if pos > 0)}/{num_positions}")
-        print(f"ðŸ’¸ Total Brokerage: â‚¹{total_brokerage:,.2f}")
+            print(f"📊 CAGR: {cagr*100:.2f}%")
+        print(f"🏢 Active Positions: {sum(1 for pos in final_position_map.values() if pos > 0)}/{num_positions}")
+        print(f"💸 Total Brokerage: ₹{total_brokerage:,.2f}")
         print("="*80)
 
         fio.get_cwd()
@@ -974,11 +974,11 @@ class FilteringAndBacktesting:
         3. Execute backtesting with realistic trading constraints
         4. Generate comprehensive performance analysis
         """
-        print("ðŸš€ STARTING PORTFOLIO MANAGEMENT SYSTEM")
-        print(f"ðŸ’° Total Investment Capital: â‚¹{self.initial_cash:,.2f}")
-        print(f"ðŸ“Š Strategy: {config.ACTIVE_FILTER}")
-        print(f"â±ï¸  Min Holding Period: {MIN_HOLDING_PERIOD} days")
-        print(f"ðŸŽ¯ Min Profit Target: {MIN_PROFIT_PERCENTAGE}%")
+        print("🚀 STARTING PORTFOLIO MANAGEMENT SYSTEM")
+        print(f"💰 Total Investment Capital: ₹{self.initial_cash:,.2f}")
+        print(f"📊 Strategy: {config.ACTIVE_FILTER}")
+        print(f"⏱️ Min Holding Period: {MIN_HOLDING_PERIOD} days")
+        print(f"🎯 Min Profit Target: {MIN_PROFIT_PERCENTAGE}%")
 
         # Execute the complete workflow
         filtered_scrips_df = self.apply_filter(master_df)
@@ -994,9 +994,9 @@ class FilteringAndBacktesting:
                 dashboard = TradingDashboard(combined_scrips_df, combined_transactions_df)
                 dashboard.launch_dashboard()
                 dashboard.export_dashboard_data()
-                print("ðŸ“Š Interactive dashboard launched successfully!")
+                print("📊 Interactive dashboard launched successfully!")
             except Exception as e:
-                print(f"âš ï¸ Dashboard creation failed: {e}")      
+                print(f"⚠️ Dashboard creation failed: {e}")      
 
         return backtested_scrips_df, backtested_transactions_df,dashboard
 
@@ -1011,19 +1011,19 @@ if __name__ == '__main__':
     print("ALGORITHMIC TRADING PORTFOLIO MANAGEMENT SYSTEM".center(80))
     print("=" * 80)
     
-    # Load market data
-    master_df = fio.read_csv_to_df('Nif50_5y_1w.csv', 'A', 'sub_dir')
+    # Load market data (from input_data)
+    master_df = fio.read_csv_to_df('Nif50_5y_1w.csv', 'A', 'input_data')
     
     # Initialize portfolio management system
     portfolio_manager = FilteringAndBacktesting(initial_cash=100000.0)
     
     # Setup logging
-    fio.change_cwd('filtered_data')
+    fio.change_cwd('output_data')
     sys.stdout = DualLogger("portfolio_trading_log.txt")
     
-    print(f"ðŸ“ Data Source: Nif50_5y_1w.csv")
-    print(f"ðŸ’¼ Portfolio Manager Initialized")
-    print(f"ðŸ“ Logging to: portfolio_trading_log.txt")
+    print(f"📁 Data Source: Nif50_5y_1w.csv")
+    print(f"💼 Portfolio Manager Initialized")
+    print(f"📄 Logging to: portfolio_trading_log.txt")
     
     # Execute portfolio strategy
     portfolio_manager.run(master_df)
@@ -1032,6 +1032,10 @@ if __name__ == '__main__':
     fio.get_cwd()
     sys.stdout.flush()
     
-    print("\nðŸŽ‰ PORTFOLIO ANALYSIS COMPLETED SUCCESSFULLY!")
-    print("ðŸ“Š Check 'gain_details' folder for detailed reports")
-    print("ðŸ“ Review 'portfolio_trading_log.txt' for complete trading history")
+    print("\n🎉 PORTFOLIO ANALYSIS COMPLETED SUCCESSFULLY!")
+    print("📊 Check 'gain_details' folder for detailed reports")
+    print("📄 Review 'portfolio_trading_log.txt' for complete trading history")
+    
+    print("\n[CELEBRATION] PORTFOLIO ANALYSIS COMPLETED SUCCESSFULLY!")
+    print("[CHART] Check 'gain_details' folder for detailed reports")
+    print("[DOCUMENT] Review 'portfolio_trading_log.txt' for complete trading history")

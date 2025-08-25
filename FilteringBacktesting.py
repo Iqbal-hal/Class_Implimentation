@@ -1,4 +1,4 @@
-import support_files.config as config
+﻿import support_files.config as config
 import pandas as pd
 import numpy as np
 from support_files.scrip_extractor import scrip_extractor, scripdf_extractor
@@ -54,7 +54,7 @@ class FilteringAndBacktesting:
 
     # --------------------- BACKTESTING METHODS ---------------------
     def calculate_fee(self, trade_value):
-        """Returns the broker fee: ₹20 or 2.5% of trade value (whichever is lower)."""
+        """Returns the broker fee: â‚¹20 or 2.5% of trade value (whichever is lower)."""
         fee_percent = 0.025 * trade_value
         fixed_fee = 20.0
         return min(fixed_fee, fee_percent)
@@ -279,7 +279,8 @@ class FilteringAndBacktesting:
             backtested_transactions_df = backtested_transactions_df[transaction_cols]
         
         import support_files.File_IO as fio
-        fio.change_cwd('gain_details')
+        # write outputs (excel/logs) into unified output folder
+        fio.change_cwd('output_data')
         with pd.ExcelWriter("global_transactions_summary.xlsx", engine="openpyxl") as writer:
             title_row.to_excel(writer, sheet_name="Sheet1", startrow=0, startcol=0, index=False, header=False)
             summary_startrow = len(title_row)
@@ -316,12 +317,14 @@ if __name__ == '__main__':
     import support_files.File_IO as fio
 
     # Read the master dataframe (concatenated OHLC data)
-    master_df = fio.read_csv_to_df('Nif50_5y_1w.csv', 'A','sub_dir')
+    # read inputs from input_data folder
+    master_df = fio.read_csv_to_df('Nif50_5y_1w.csv', 'A', 'input_data')
     
     # Create an instance of FilteringAndBacktesting and run the full process
     fab = FilteringAndBacktesting(initial_cash=10000.0)
-    fio.change_cwd('filtered_data')
-    sys.stdout = DualLogger("log.txt")
+    # ensure all generated outputs go into output_data
+    fio.change_cwd('output_data')
+    sys.stdout = DualLogger("portfolio_trading_log.txt")
     
     fab.run(master_df)
     

@@ -7,6 +7,8 @@ import webbrowser
 import tempfile
 from pathlib import Path
 
+import support_files.updated_config as config
+
 class TradingDashboard:
     def __init__(self, backtested_scrips_df, backtested_transactions_df):
         """
@@ -25,7 +27,7 @@ class TradingDashboard:
         """
         Convert the backtested data into format suitable for the dashboard.
         """
-        print("🔄 Preparing data for visualization dashboard...")
+        print("📄 Preparing data for visualization dashboard...")
         
         stock_data = {}
         transaction_data = {}
@@ -654,10 +656,14 @@ class TradingDashboard:
             html_content = self.create_dashboard_html(include_data=True)
             
             # Save to file
-            with open(filename, 'w', encoding='utf-8') as f:
+            # ensure exports are written into the output_data folder when called from backtest
+            out_dir = Path('output_data')
+            out_dir.mkdir(parents=True, exist_ok=True)
+            file_path = out_dir / filename
+            with open(file_path, 'w', encoding='utf-8') as f:
                 f.write(html_content)
             
-            file_path = os.path.abspath(filename)
+            file_path = os.path.abspath(str(file_path))
             print(f"✅ Dashboard created: {file_path}")
             
             if auto_open:
@@ -675,34 +681,37 @@ class TradingDashboard:
         Export all dashboard data and files to a directory.
         """
         try:
-            # Create export directory
-            Path(export_dir).mkdir(exist_ok=True)
+            # write exports under output_data/export_dir for consistency with other outputs
+            base_out = Path('output_data')
+            base_out.mkdir(exist_ok=True)
+            export_path = base_out / export_dir
+            export_path.mkdir(parents=True, exist_ok=True)
             
             # Save data as JSON
-            data_file = os.path.join(export_dir, 'trading_data.json')
-            with open(data_file, 'w') as f:
-                json.dump(self.dashboard_data, f, indent=2)
+            data_file = export_path / 'trading_data.json'
+            with open(data_file, 'w', encoding='utf-8') as f:
+                json.dump(self.dashboard_data, f, indent=2, default=str)
             
             # Create standalone HTML
-            html_file = os.path.join(export_dir, 'trading_dashboard.html')
+            html_file = export_path / 'trading_dashboard.html'
             html_content = self.create_dashboard_html(include_data=True)
             with open(html_file, 'w', encoding='utf-8') as f:
                 f.write(html_content)
             
             # Export raw CSV data
             if not self.backtested_scrips_df.empty:
-                csv_file = os.path.join(export_dir, 'backtested_data.csv')
+                csv_file = export_path / 'backtested_data.csv'
                 self.backtested_scrips_df.to_csv(csv_file, index=False)
             
             if not self.backtested_transactions_df.empty:
-                trans_file = os.path.join(export_dir, 'transactions.csv')
+                trans_file = export_path / 'transactions.csv'
                 self.backtested_transactions_df.to_csv(trans_file, index=False)
             
-            print(f"✅ Dashboard exported to '{export_dir}' directory")
+            print(f"✅ Dashboard exported to '{export_path}' directory")
             print(f"   - HTML Dashboard: {html_file}")
             print(f"   - Trading Data: {data_file}")
             
-            return export_dir
+            return str(export_path)
             
         except Exception as e:
             print(f"❌ Error exporting dashboard: {e}")
@@ -787,8 +796,8 @@ def enhanced_run_method():
         print("🚀 STARTING PORTFOLIO MANAGEMENT SYSTEM")
         print(f"💰 Total Investment Capital: ₹{self.initial_cash:,.2f}")
         print(f"📊 Strategy: {config.ACTIVE_FILTER}")
-        print(f"⏱️  Min Holding Period: {MIN_HOLDING_PERIOD} days")
-        print(f"🎯 Min Profit Target: {MIN_PROFIT_PERCENTAGE}%")
+        print(f"⏱️ Min Holding Period: {config.MIN_HOLDING_PERIOD} days")
+        print(f"🎯 Min Profit Target: {config.MIN_PROFIT_PERCENTAGE}%")
 
         # Execute the complete workflow
         filtered_scrips_df = self.apply_filter(master_df)
@@ -908,5 +917,5 @@ if __name__ == "__main__":
     """)
     
     print("\n✅ Dashboard integration module ready!")
-    print("📁 Save this as 'dashboard_integration.py' alongside your main script")
+    print("📝 Save this as 'dashboard_integration.py' alongside your main script")
     print("🚀 Import and integrate with your FilteringAndBacktesting class")
