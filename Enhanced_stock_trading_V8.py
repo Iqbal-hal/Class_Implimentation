@@ -896,7 +896,7 @@ class FilteringAndBacktesting:
 
         # Export to Excel with professional formatting
         import support_files.File_IO as fio
-        fio.change_cwd('gain_details')
+        fio.change_cwd('../output_data')
 
         print(f"\n" + "="*60)
         print("EXPORTING PORTFOLIO ANALYSIS".center(60))
@@ -1026,7 +1026,7 @@ if __name__ == '__main__':
     portfolio_manager = FilteringAndBacktesting(initial_cash=100000.0)
     
     # Setup logging
-    fio.change_cwd('output_data')
+    fio.change_cwd('../output_data')
     sys.stdout = DualLogger("portfolio_trading_log.txt")
     
     print(f"📁 Data Source: Nif50_5y_1w.csv")
@@ -1041,9 +1041,9 @@ if __name__ == '__main__':
     sys.stdout.flush()
     
     print("\n🎉 PORTFOLIO ANALYSIS COMPLETED SUCCESSFULLY!")
-    print("📊 Check 'gain_details' folder for detailed reports")
+    print("📊 Check 'output_data' folder for detailed reports")
     print("📄 Review 'portfolio_trading_log.txt' for complete trading history")
     
     print("\n[CELEBRATION] PORTFOLIO ANALYSIS COMPLETED SUCCESSFULLY!")
-    print("[CHART] Check 'gain_details' folder for detailed reports")
+    print("[CHART] Check 'output_data' folder for detailed reports")
     print("[DOCUMENT] Review 'portfolio_trading_log.txt' for complete trading history")

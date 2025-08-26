@@ -50,7 +50,7 @@ FILTER_RECOMMENDATIONS = {
 }
 
 # Active configuration parameters - Updated with enhanced filter
-ACTIVE_FILTER = 'filter_momentum'
+ACTIVE_FILTER = 'filter_momentum_with_support_resistance'
 FILTER_ENABLED = True
 LOGGING_ENABLED = True
 ENABLE_DETAILED_LOGGING = True
@@ -117,7 +117,7 @@ __all__ = [
 
 # Maintain original import structure for compatibility
 try:
-    from Class_Implimentation.support_files.updated_filters import (
+    from support_files.updated_filters import (
         # Original filters
         filter_basic,
         filter_aggressive,

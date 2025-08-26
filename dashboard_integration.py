@@ -680,8 +680,8 @@ class TradingDashboard:
         except Exception as e:
             print(f"❌ Error launching dashboard: {e}")
             return None
-    
-    def export_dashboard_data(self, export_dir='dashboard_exports'):
+
+    def export_dashboard_data(self, export_dir='/dashboard_exports'):
         """
         Export all dashboard data and files to a directory.
         """
