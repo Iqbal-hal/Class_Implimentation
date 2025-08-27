@@ -50,7 +50,7 @@ FILTER_RECOMMENDATIONS = {
 }
 
 # Active configuration parameters - Updated with enhanced filter
-ACTIVE_FILTER = 'filter_momentum_with_support_resistance'
+ACTIVE_FILTER = 'filter_ensemble_weighted'
 FILTER_ENABLED = True
 LOGGING_ENABLED = True
 ENABLE_DETAILED_LOGGING = True
@@ -59,8 +59,8 @@ ENABLE_DETAILED_LOGGING = True
 USE_SUPPORT_TRAILING_EXITS = True
 TRAILING_STOP_PERCENT = 15.0
 SUPPORT_TYPE = 'min'
-MIN_HOLDING_PERIOD = 45
-MIN_PROFIT_PERCENTAGE = 35.0
+MIN_HOLDING_PERIOD = 120
+MIN_PROFIT_PERCENTAGE = 25.0
 MIN_FILTER_SELL_PROFIT = 15.0
 
 # New profit optimization parameters
