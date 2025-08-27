@@ -1,0 +1,56 @@
+digraph G {
+  rankdir=LR;
+  node [shape=box];
+
+  A [label="Input Data: Concatenated OHLC (multiple scrips)"];
+  B [label="scrip_extractor() → Split per scrip"];
+  C [label="compute_indicators_helper → Technical Indicators"];
+  D [label="updated_filters (ACTIVE_FILTER) → Buy/Sell Signals"];
+  E [label="Filter & Screening → Eligible Scrips"];
+  F [label="Portfolio Allocation (Scoring + Weights)"];
+  G [label="Backtesting Engine"];
+  H [label="Aggregate Portfolio Results"];
+  I [label="Dashboard (Streamlit + Plotly)"];
+  J [label="Excel Reports Export"];
+
+  A -> B -> C -> D -> E -> F -> G -> H;
+  H -> I;
+  H -> J;
+
+  subgraph cluster_indicators {
+    label="Technical Indicators";
+    style=dashed;
+    C1 [label="EMA family"];
+    C2 [label="RSI"];
+    C3 [label="MACD"];
+    C4 [label="Bollinger Bands"];
+    C5 [label="ROC"];
+    C6 [label="60-day High/Low"];
+    C7 [label="VWAP"];
+    C8 [label="ADX/±DI"];
+    C9 [label="ATR"];
+    C10 [label="Supertrend"];
+    C -> C1; C -> C2; C -> C3; C -> C4; C -> C5; C -> C6; C -> C7; C -> C8; C -> C9; C -> C10;
+  }
+
+  subgraph cluster_alloc {
+    label="Allocation Logic";
+    style=dashed;
+    F1 [label="Score Calculation (Tech + Signal + Momentum + Vol)"];
+    F2 [label="Rank & Exponential Decay"];
+    F3 [label="Clamp Weights (5%-35%)"];
+    F4 [label="Normalize to 100%"];
+    F5 [label="Final ₹ Allocation"];
+    F -> F1 -> F2 -> F3 -> F4 -> F5;
+  }
+
+  subgraph cluster_backtest {
+    label="Backtesting Logic";
+    style=dashed;
+    G1 [label="Buy: Buy Signal & No Position"];
+    G2 [label="Sell: Sell Signal & (Min Holding + Profit)"];
+    G3 [label="Brokerage Fees"];
+    G4 [label="Transaction Ledger"];
+    G -> G1 -> G2 -> G3 -> G4;
+  }
+}
