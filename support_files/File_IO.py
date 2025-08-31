@@ -38,7 +38,14 @@ def save_df_to_csv(_df, filename, _order,target_dir):
     #order 'A' for Ascending 'D' for descending
     filename, order = filename_formatter(filename, _order)
 
-    _df = _df.sort_values(by=['Stock', 'Date'], ascending=[True, order])
+    # Robust sort: if 'Date' is a column sort by ['Stock','Date'] otherwise sort by index then by Stock (stable)
+    if 'Date' in _df.columns:
+        _df = _df.sort_values(by=['Stock', 'Date'], ascending=[True, order], kind='mergesort')
+    else:
+        # If Date is the index (preferred), sort index then stably sort by Stock
+        _df = _df.sort_index(ascending=order)
+        if 'Stock' in _df.columns:
+            _df = _df.sort_values(by=['Stock'], kind='mergesort')
 
     try:
         cd = os.getcwd()
@@ -79,10 +86,26 @@ def read_csv_to_df(filename, _order,source_dir):
 
     order = convert_order(_order)
     _df = pd.read_csv(filename)
-    _df['Date'] = pd.to_datetime(_df['Date'])
-    _df.set_index('Date', inplace=True)  # set Date column as index
-    _df.sort_index(axis=0, inplace=True)  # index based sorting compulsory for slicing
-    _df = _df.sort_values(by=['Stock', 'Date'], ascending=[True, order])
+    # Safe column normalization: trim whitespace and remove BOM/zero-width spaces
+    try:
+        def _clean_col(c):
+            s = str(c)
+            # remove BOM, zero-width spaces, and trim
+            return (
+                s.replace('\ufeff', '').replace('\u200b', '').strip()
+            )
+        _df.columns = [_clean_col(c) for c in _df.columns]
+    except Exception:
+        pass
+    # Normalize Date to datetime; if absent but index looks like date, keep it
+    if 'Date' in _df.columns:
+        _df['Date'] = pd.to_datetime(_df['Date'])
+        _df.set_index('Date', inplace=True)  # set Date column as index
+    # index-based sorting compulsory for slicing
+    _df.sort_index(axis=0, inplace=True)
+    # Then stable sort by Stock without referencing a non-existent Date column
+    if 'Stock' in _df.columns:
+        _df = _df.sort_values(by=['Stock'], kind='mergesort')
 
     os.chdir(cd)
 
@@ -92,10 +115,12 @@ def read_csv_to_df(filename, _order,source_dir):
 def read_pkl_to_df(filename, _order):
     order = convert_order(_order)
     _df = pd.read_pickle(filename)
-    _df['Date'] = pd.to_datetime(_df['Date'])
-    _df.set_index('Date', inplace=True)  # set Date column as index
+    if 'Date' in _df.columns:
+        _df['Date'] = pd.to_datetime(_df['Date'])
+        _df.set_index('Date', inplace=True)  # set Date column as index
     _df.sort_index(axis=0, inplace=True)  # index based sorting compulsory for slicing
-    _df = _df.sort_values(by=['Stock', 'Date'], ascending=[True, order])
+    if 'Stock' in _df.columns:
+        _df = _df.sort_values(by=['Stock'], kind='mergesort')
     return _df
 
 
@@ -161,5 +186,7 @@ def df_slicer(_df, _order,start_date,end_date):
     # index based sorting compulsory for slicing
     _df.sort_index(axis=0, inplace=True)
     _df = _df.loc[start_date:end_date]
-    _df = _df.sort_values(by=['Stock', 'Date'], ascending=[True, order])
+    # Stable sort by Stock while preserving date order in the index
+    if 'Stock' in _df.columns:
+        _df = _df.sort_values(by=['Stock'], kind='mergesort')
     return _df

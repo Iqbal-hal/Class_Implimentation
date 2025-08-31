@@ -185,6 +185,8 @@ class Config:
     use_log_returns: bool = True
     nan_policy: str = "drop"
     feature_frames: Optional[dict] = None  # NEW: optional dict of indicator frames
+    # NEW: decay rate used by score_rank_claude strategy (weight decay by rank)
+    decay_rate: float = 1.0
 
 class BaseStrategy:
     """Base class for portfolio strategies."""
@@ -461,6 +463,64 @@ class ScoreRankClaude(BaseStrategy):
         w = base.values
         s = w.sum()
         if s > 0: w = w / s
+        w = _project_to_boxed_simplex(np.clip(w, lb, ub), lb, ub, constraints.budget)
+        weights = pd.Series(w, index=cols, name="weight")
+        return _enforce_group_limits(weights, constraints.group_limits or {})
+@register_strategy("legacy_risk_weighted")
+class LegacyRiskWeighted(BaseStrategy):
+    """
+    Legacy Risk-Weighted (ported from Enhanced_stock_trading_V8.allocate_portfolio):
+    - Uses your legacy per-ticker scoring + exponential rank decay.
+    - Applies per-asset min/max caps and projects to the budget simplex.
+    How to feed scores:
+      Option A (preferred for exact parity):
+        Pass a precomputed score Series via config["feature_frames"]["LEGACY_SCORE"].
+      Option B (full port):
+        Paste your old scoring snippet inside this strategy (marked below).
+    """
+    def allocate(self, returns, cov, signals, fundamentals, constraints, config):
+        import numpy as np, pandas as pd
+
+        cols = list(returns.columns)
+        ff = getattr(config, "feature_frames", None) or {}
+
+        # ---------- Option A: use precomputed legacy scores ----------
+        legacy_score = None
+        if "LEGACY_SCORE" in ff:
+            obj = ff["LEGACY_SCORE"]
+            if isinstance(obj, pd.DataFrame):
+                # If a DF is provided, take the last row or squeeze to Series
+                legacy_score = obj.iloc[-1].reindex(cols)
+            elif isinstance(obj, pd.Series):
+                legacy_score = obj.reindex(cols)
+
+        # ---------- Option B: (if you prefer to keep all logic here) ----------
+        # If legacy_score is still None, you can paste your original scoring code here.
+        # Inputs you can rely on:
+        #   - 'returns' (lookback window controlled by config.lookback_days)
+        #   - 'fundamentals' (index=tickers) if you used PE/EPS etc.
+        #   - 'signals' or config.feature_frames (RSI/MACD/SMA/Buy/Sell/Close) if needed
+        #
+        # Example fallback (keeps behavior sane if you haven't pasted your snippet yet):
+        if legacy_score is None:
+            # Simple momentum as a harmless default
+            L = min(getattr(config, "lookback_days", 252), max(returns.shape[0], 1))
+            R = returns.tail(L)
+            legacy_score = (np.exp(R.sum()) - 1.0)  # log return cum (if use_log_returns True)
+
+        # ---------- Rank + exponential decay ----------
+        decay = float(getattr(config, "decay_rate", 0.92))
+        rank = legacy_score.rank(ascending=False, method="first")
+        base = (legacy_score.clip(lower=0) + 1e-12)  # ensure positive
+        base = (base / base.sum()) * (decay ** (rank - 1))
+
+        # ---------- Box constraints + budget projection ----------
+        lb = constraints.min_weight if constraints.long_only else -constraints.max_weight
+        ub = constraints.max_weight
+        w = base.values.astype(float)
+        s = w.sum()
+        if s > 0:
+            w = w / s
         w = _project_to_boxed_simplex(np.clip(w, lb, ub), lb, ub, constraints.budget)
         weights = pd.Series(w, index=cols, name="weight")
         return _enforce_group_limits(weights, constraints.group_limits or {})

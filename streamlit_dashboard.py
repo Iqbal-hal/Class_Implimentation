@@ -153,6 +153,18 @@ with st.sidebar:
     enable_detailed = st.checkbox("Enable Detailed Logging", value=getattr(cfg,'ENABLE_DETAILED_LOGGING', True), help="When enabled, backtest logs include step-by-step arithmetic for the first runs.")
     position_sizing = st.checkbox("Enable Position Sizing", value=getattr(cfg,'POSITION_SIZING_ENABLED', True), help="Enable dynamic position sizing based on volatility / signal strength.")
 
+    # Portfolio Optimisation strategy selector
+    st.header("Portfolio Optimisation")
+    _opts = ["score_rank_claude", "legacy_risk_weighted"]
+    _default_strategy = getattr(cfg, 'PORTFOLIO_STRATEGY', 'score_rank_claude')
+    _idx = _opts.index(_default_strategy) if _default_strategy in _opts else 0
+    portfolio_strategy = st.selectbox(
+        "Allocation Strategy",
+        options=_opts,
+        index=_idx,
+        help="Choose how to allocate funds among filtered stocks."
+    )
+
     if st.button("Save Configuration"):
         # Determine active filter to write
         if selected_filter != "<use market condition>":
@@ -182,7 +194,8 @@ with st.sidebar:
             'SR_LOOKBACK': int(sr_lookback),
             'SR_TOLERANCE': float(sr_tolerance),
             'ENABLE_DETAILED_LOGGING': bool(enable_detailed),
-            'POSITION_SIZING_ENABLED': bool(position_sizing)
+            'POSITION_SIZING_ENABLED': bool(position_sizing),
+            'PORTFOLIO_STRATEGY': portfolio_strategy
         }
         lines = read_config_lines()
         new_lines = update_config_values(lines, updates)
@@ -193,6 +206,10 @@ with st.sidebar:
     if st.button("Reload Config (without saving)"):
         cfg = reload_config()
         st.success("Configuration reloaded")
+
+    # Show current optimiser strategy from config
+    current_strategy = getattr(cfg, 'PORTFOLIO_STRATEGY', 'score_rank_claude')
+    st.sidebar.markdown(f"**Current Portfolio Strategy:** `{current_strategy}`")
 
 st.header("Overview & Descriptions")
 st.markdown("""
@@ -243,7 +260,8 @@ if st.button("Run Backtest Now") or (mode=="Edit, Save & Run Backtest" and run_b
             st.error(f"Input folder not found: {input_dir}. Create and place your CSVs there.")
             raise FileNotFoundError(f"Input folder not found: {input_dir}")
         master_df = fio.read_csv_to_df('Nif50_5y_1w.csv', 'A', 'input_data')
-        fb = FilteringAndBacktesting(initial_cash=getattr(cfg,'folio_final_value',100000.0))
+        # Pass initial cash from config (default 100000 if not set)
+        fb = FilteringAndBacktesting(initial_cash=getattr(cfg, 'INITIAL_CASH', 100000.0))
         # run with dashboard creation disabled to keep it headless here
         backtested_scrips_df, backtested_tx_df, dashboard = fb.run(master_df, create_dashboard=False)
         st.success("Backtest finished (check log files and gain_details).")

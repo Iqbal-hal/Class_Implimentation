@@ -19,7 +19,9 @@ import pandas as pd
 import numpy as np
 from support_files.scrip_extractor import scrip_extractor
 import support_files.compute_indicators_helper as cmp  # For computing technical indicators
-from dashboard_integration import TradingDashboard, create_visualization_dashboard
+from dashboard_integration import TradingDashboard
+from portfolio_optimiser import optimize_portfolio
+
 
 # Trade constraint constants
 MIN_PROFIT_PERCENTAGE = config.MIN_PROFIT_PERCENTAGE
@@ -37,186 +39,27 @@ class FilteringAndBacktesting:
         # Control verbose detailed prints: show full calculation details once (at start)
         self._detailed_print_shown = False
 
-    # --------------------- PORTFOLIO ALLOCATION METHODS ---------------------
-    def calculate_stock_score(self, scrip_ta_df, scrip):
-        """
-        Calculate a composite score for each stock based on multiple factors.
-        Stores detailed score components in self.stock_scores[scrip].
-        """
-        try:
-            rsi = scrip_ta_df['RSI'].iloc[-1] if 'RSI' in scrip_ta_df.columns else 50.0
-            macd = scrip_ta_df['MACD'].iloc[-1] if 'MACD' in scrip_ta_df.columns else 0.0
-            sma_ratio = (
-                scrip_ta_df['Close'].iloc[-1] / scrip_ta_df['SMA_20'].iloc[-1]
-                if 'SMA_20' in scrip_ta_df.columns and scrip_ta_df['SMA_20'].iloc[-1] != 0
-                else 1.0
-            )
-
-            rsi_score = max(0.0, min(100.0, 100.0 - abs(rsi - 40.0)))
-            macd_score = min(100.0, max(0.0, 50.0 + (macd * 10.0)))
-            sma_score = min(100.0, max(0.0, (sma_ratio - 0.95) * 200.0))
-            technical_score = (rsi_score * 0.4 + macd_score * 0.3 + sma_score * 0.3)
-
-            buy_signals = int(scrip_ta_df['Buy'].sum()) if 'Buy' in scrip_ta_df.columns else 0
-            sell_signals = int(scrip_ta_df['Sell'].sum()) if 'Sell' in scrip_ta_df.columns else 0
-            total_signals = buy_signals + sell_signals
-            if total_signals <= 20:
-                signal_score = min(100.0, max(0.0, total_signals * 5.0))
-            else:
-                signal_score = max(0.0, 100.0 - (total_signals - 20) * 2.0)
-
-            if len(scrip_ta_df) >= 20 and scrip_ta_df['Close'].iloc[-20] != 0:
-                price_change = ((scrip_ta_df['Close'].iloc[-1] - scrip_ta_df['Close'].iloc[-20])
-                                / scrip_ta_df['Close'].iloc[-20] * 100.0)
-            else:
-                price_change = 0.0
-            momentum_score = min(100.0, max(0.0, 50.0 + price_change * 2.0))
-
-            volatility = scrip_ta_df['Close'].pct_change().std() * 100.0 if 'Close' in scrip_ta_df.columns else 0.0
-            volatility_score = min(100.0, max(0.0, 100.0 - volatility * 5.0))
-
-            composite_score = (technical_score * 0.4 + signal_score * 0.3 +
-                               momentum_score * 0.2 + volatility_score * 0.1)
-
-            self.stock_scores[scrip] = {
-                'composite_score': composite_score,
-                'technical_score': technical_score,
-                'signal_score': signal_score,
-                'momentum_score': momentum_score,
-                'volatility_score': volatility_score,
-                'buy_signals': buy_signals,
-                'sell_signals': sell_signals,
-                'current_price': float(scrip_ta_df['Close'].iloc[-1]) if 'Close' in scrip_ta_df.columns else 0.0,
-                'rsi': rsi,
-                'price_momentum': price_change
-            }
-
-            return composite_score
-        except Exception as e:
-            print(f"Error calculating score for {scrip}: {e}")
-            return 50.0
-
+    # --------------------- PORTFOLIO ALLOCATION METHODS ---------------------     
     
-    def allocate_portfolio(self, filtered_scrips_df):
+    def allocate_portfolio(self, prices_df, signals_df=None, fund_df=None,
+                        method="legacy_risk_weighted", constraints=None, config=None):
         """
-        Intelligently allocate the total cash across stocks based on their scores.
-        Prints detailed calculation steps for allocation using standard trading terminology.
+        Unified allocator: call any strategy in portfolio_optimiser (including the new legacy_risk_weighted).
+        Expects prices_df (and optional signals/fund_df) already sliced to filtered tickers.
+        Returns a weights Series (sum≈1).
         """
-        scrips = filtered_scrips_df['Stock'].unique()
-        print(f"\n" + "="*80)
-        print(f"PORTFOLIO ALLOCATION STRATEGY".center(80))
-        print(f"="*80)
-        print(f"Total Capital Available: ₹{self.initial_cash:,.2f}")
-        print(f"Number of Securities Selected: {len(scrips)}")
-        print(f"Allocation Method: Risk-Weighted Dynamic Allocation")
-        
-        # Calculate scores for all stocks
-        stock_scores = {}
-        for scrip in scrips:
-            scrip_data = filtered_scrips_df[filtered_scrips_df['Stock'] == scrip]
-            score = self.calculate_stock_score(scrip_data, scrip)
-            stock_scores[scrip] = score
-        
-        # Sort stocks by score (descending)
-        sorted_stocks = sorted(stock_scores.items(), key=lambda x: x[1], reverse=True)
-        
-        # Allocation Strategy: Exponential decay with minimum allocation
-        total_weight = 0.0
-        weights = {}
-        
-        # Calculate weights using exponential decay
-        for i, (scrip, score) in enumerate(sorted_stocks):
-            decay_factor = 0.8 ** i  # Each subsequent stock gets 80% of previous weight
-            base_weight = score / 100.0  # Normalize score to 0-1
-            weight = base_weight * decay_factor
-            weights[scrip] = weight
-            total_weight += weight
+        constraints = constraints or {"long_only": True, "max_weight": 0.15, "budget": 1.0}
+        config = config or {"lookback_days": 252, "cov_method": "ledoit_wolf_simple"}
 
-        # Print weight calculation details
-        print(f"\nRISK-WEIGHTED ALLOCATION CALCULATION:")
-        print(f"{'Security':<15} {'Score':>8} {'Rank':>6} {'Weight':>10} {'Raw Alloc':>12}")
-        print("-" * 60)
-        for i, (scrip, score) in enumerate(sorted_stocks):
-            decay_factor = 0.8 ** i
-            base_weight = score / 100.0
-            raw_w = weights[scrip]
-            print(f"{scrip:<15} {score:8.1f} #{i+1:>5} {raw_w:10.6f} {raw_w/total_weight*100:11.2f}%")
-        print(f"Total Weight Sum: {total_weight:.6f}")
+        return optimize_portfolio(
+            prices=prices_df,
+            signals=signals_df,
+            fundamentals=fund_df,
+            method=method,
+            constraints=constraints,
+            config=config,
+        )
 
-        # Normalize weights to sum to 1
-        min_allocation = 0.05  # 5% minimum
-        max_allocation = 0.35  # 35% maximum
-
-        normalized_weights = {}
-        print(f"\nAPPLYING POSITION SIZE LIMITS:")
-        print(f"Minimum Position Size: {min_allocation*100:.1f}%")
-        print(f"Maximum Position Size: {max_allocation*100:.1f}%")
-        
-        for scrip, weight in weights.items():
-            normalized = weight / total_weight if total_weight else 0.0
-            normalized_weights[scrip] = normalized
-
-        # Apply min/max constraints
-        constrained_weights = {}
-        print(f"\n{'Security':<15} {'Before':<10} {'After':<10} {'Status':<15}")
-        print("-" * 55)
-        for scrip, normalized in normalized_weights.items():
-            constrained = max(min_allocation, min(normalized, max_allocation))
-            constrained_weights[scrip] = constrained
-            if constrained != normalized:
-                if constrained == min_allocation:
-                    status = "Min Applied"
-                else:
-                    status = "Max Applied"
-            else:
-                status = "No Change"
-            print(f"{scrip:<15} {normalized*100:9.2f}% {constrained*100:9.2f}% {status:<15}")
-
-        total_constrained = sum(constrained_weights.values()) or 1.0
-
-        # Renormalize constrained weights to sum to 1
-        for scrip in constrained_weights:
-            normalized_weights[scrip] = constrained_weights[scrip] / total_constrained
-
-        # Calculate final allocations and print detailed steps
-        print(f"\n" + "="*80)
-        print(f"FINAL PORTFOLIO ALLOCATION".center(80))
-        print(f"="*80)
-        print(f"{'Security':<15} {'Score':<8} {'Weight':<10} {'Capital Alloc':<15} {'Rank':<6}")
-        print("-" * 65)
-        
-        for i, (scrip, score) in enumerate(sorted_stocks):
-            allocation_pct = normalized_weights[scrip] * 100.0
-            allocation_amount = self.initial_cash * normalized_weights[scrip]
-            self.stock_allocations[scrip] = allocation_amount
-            
-            print(f"{scrip:<15} {score:<8.1f} {allocation_pct:<9.2f}% ₹{allocation_amount:<14,.0f} #{i+1:<6}")
-        
-        print("-" * 65)
-        total_alloc = sum(self.stock_allocations.values())
-        print(f"{'TOTAL':<15} {'':<8} {'100.0%':<10} ₹{total_alloc:<14,.0f}")
-        
-        # Print detailed scoring breakdown for top 3 stocks (only once)
-        if not self._detailed_print_shown:
-            print(f"\n" + "="*60)
-            print(f"TOP 3 SECURITIES - DETAILED ANALYSIS".center(60))
-            print(f"="*60)
-            for i, (scrip, score) in enumerate(sorted_stocks[:3]):
-                details = self.stock_scores[scrip]
-                print(f"\n#{i+1} {scrip} - Overall Score: {score:.1f}/100")
-                print(f"  Technical Strength: {details['technical_score']:.1f}/100")
-                print(f"  Signal Quality:     {details['signal_score']:.1f}/100")
-                print(f"  Price Momentum:     {details['momentum_score']:.1f}/100 ({details['price_momentum']:.2f}% change)")
-                print(f"  Risk Assessment:    {details['volatility_score']:.1f}/100")
-                print(f"  Current Market Price: ₹{details['current_price']:.2f}")
-                print(f"  RSI Level:          {details['rsi']:.1f}")
-                print(f"  Trading Signals:    {details['buy_signals']} Buy, {details['sell_signals']} Sell")
-            # mark detailed calculations as shown so later per-stock runs remain concise
-            self._detailed_print_shown = True
-        else:
-            print("\nDetailed analysis already shown; subsequent logs will be concise.")
-        
-        return self.stock_allocations
 
     # --------------------- FILTERING METHODS ---------------------
     def apply_filter(self, master_df):
@@ -237,6 +80,17 @@ class FilteringAndBacktesting:
 
         for scrip, scrip_df in scrip_extractor(master_df):
             scrip_ta_df = cmp.compute_indicators(scrip_df)
+            # Ensure the 'Stock' column is present and correct for this slice
+            try:
+                scrip_ta_df['Stock'] = scrip
+            except Exception:
+                scrip_ta_df = scrip_ta_df.copy()
+                scrip_ta_df['Stock'] = scrip
+            # Ensure 'Date' is a column (reset from index if needed) before concatenation
+            if 'Date' not in scrip_ta_df.columns:
+                scrip_ta_df = scrip_ta_df.reset_index()
+                if 'Date' not in scrip_ta_df.columns and 'index' in scrip_ta_df.columns:
+                    scrip_ta_df = scrip_ta_df.rename(columns={'index': 'Date'})
 
             if config.FILTER_ENABLED:
                 filter_func = config.AVAILABLE_FILTERS.get(config.ACTIVE_FILTER)
@@ -253,9 +107,17 @@ class FilteringAndBacktesting:
                 filtered_ta_df_list.append(scrip_ta_df)
                 scrips_list.append(scrip)
 
+        # ✅ Safer: attach Stock as column before concat
         try:
-            filtered_ta_df = pd.concat(filtered_ta_df_list) if filtered_ta_df_list else pd.DataFrame()
-        except ValueError as e:
+            if filtered_ta_df_list:
+                for i, (scrip, df) in enumerate(zip(scrips_list, filtered_ta_df_list)):
+                    _df = df.copy()
+                    _df["Stock"] = scrip
+                    filtered_ta_df_list[i] = _df
+                filtered_ta_df = pd.concat(filtered_ta_df_list, ignore_index=True)
+            else:
+                filtered_ta_df = pd.DataFrame()
+        except Exception as e:
             print(f"Error in screening process: {e}")
             filtered_ta_df = pd.DataFrame()
 
@@ -263,9 +125,182 @@ class FilteringAndBacktesting:
         print(f"Filter Success Rate: {len(scrips_list)/len(master_scrips_list)*100:.1f}%")
 
         if not filtered_ta_df.empty:
-            self.allocate_portfolio(filtered_ta_df)
+            # --- NEW MODE: optimiser does all scoring (score_rank_claude) ---
+
+            # Normalize column names to avoid hidden whitespace or duplicates
+            filtered_ta_df.columns = [str(c).strip() for c in filtered_ta_df.columns]
+            fdf = filtered_ta_df.copy()
+            fdf.columns = [str(c).strip() for c in fdf.columns]
+
+            # Debug print to confirm columns
+            print(f"DEBUG Columns after normalization: {list(fdf.columns)}")
+            # Normalize date/ticker column names to avoid KeyError when sources differ
+            date_candidates = [
+                "Date", "date", "DATE", "Datetime", "datetime", "Timestamp", "timestamp"
+            ]
+            stock_candidates = ["Stock", "Ticker", "Symbol", "SYMBOL", "ticker", "stock"]
+            # Also detect by normalized names (strip/lower)
+            _date_syns = {"date", "datetime", "timestamp"}
+            _stock_syns = {"stock", "ticker", "symbol"}
+            # Prefer existing exact matches first
+            if not any(c in fdf.columns for c in stock_candidates):
+                _alt = [c for c in fdf.columns if isinstance(c, str) and c.strip().lower() in _stock_syns]
+                if _alt:
+                    fdf = fdf.rename(columns={_alt[0]: "Stock"})
+
+            date_col = next((c for c in date_candidates if c in fdf.columns), None)
+            stock_col = next((c for c in stock_candidates if c in fdf.columns), None)
+
+            # If no explicit date column, try using the index if it looks like dates
+            if date_col is None:
+                if isinstance(fdf.index, pd.DatetimeIndex) or pd.api.types.is_datetime64_any_dtype(fdf.index):
+                    fdf = fdf.reset_index().rename(columns={fdf.columns[0]: "Date"})
+                    date_col = "Date"
+                else:
+                    # As a last resort, leave date_col as None and we will raise a clearer error below
+                    pass
+
+            if date_col is None:
+                raise KeyError("Input data is missing a date column. Expected one of: "
+                               f"{date_candidates} or a DatetimeIndex.")
+            if stock_col is None:
+                raise KeyError("Input data is missing a stock/ticker column. Expected one of: "
+                               f"{stock_candidates}.")
+
+            # Ensure canonical column names
+            if date_col != "Date":
+                fdf = fdf.rename(columns={date_col: "Date"})
+            if stock_col != "Stock":
+                fdf = fdf.rename(columns={stock_col: "Stock"})
+
+            # If duplicates of 'Date' or 'Stock' exist (e.g., both 'DATE' and 'Date' renamed), coalesce to one safely
+            def _coalesce_same_named(df: pd.DataFrame, col_name: str) -> pd.DataFrame:
+                try:
+                    mask = (df.columns == col_name)
+                    if mask.sum() > 1:
+                        subset = df.loc[:, mask]
+                        try:
+                            merged = subset.bfill(axis=1).iloc[:, 0]
+                        except Exception:
+                            merged = subset.iloc[:, 0]
+                        # Only drop after successful merge
+                        new_df = df.drop(columns=list(subset.columns))
+                        new_df[col_name] = merged
+                        return new_df
+                except Exception:
+                    return df
+                return df
+            fdf = _coalesce_same_named(fdf, 'Date')
+            fdf = _coalesce_same_named(fdf, 'Stock')
+
+            # Ensure 'Stock' is a proper column (not hidden in the index)
+            if 'Stock' not in fdf.columns:
+                # If index name looks like a stock identifier, reset it to a column
+                idx_name = fdf.index.name
+                cand_set = {s.lower() for s in (stock_candidates + ["Stock"]) }
+                if idx_name and idx_name.lower() in cand_set:
+                    fdf = fdf.reset_index().rename(columns={idx_name: 'Stock'})
+                elif isinstance(fdf.index, pd.MultiIndex):
+                    for lvl_name in fdf.index.names:
+                        if lvl_name and lvl_name.lower() in cand_set:
+                            fdf = fdf.reset_index(level=lvl_name).rename(columns={lvl_name: 'Stock'})
+                            break
+
+            # Clean and sort
+            # Handle cases where 'Date' is provided as a dict-like mapping (e.g., {'year','month','day'})
+            if isinstance(fdf.get("Date"), (dict,)):
+                # Not expected in our data; skip and let error surface if needed
+                pass
+            try:
+                fdf["Date"] = pd.to_datetime(fdf["Date"], errors="coerce")
+            except Exception:
+                # If 'Date' is a DataFrame-like (multiple date parts columns), try to reduce
+                if hasattr(fdf["Date"], 'columns'):
+                    parts = fdf["Date"]
+                    for keys in (("year","month","day"), ("Year","Month","Day")):
+                        if all(k in parts.columns for k in keys):
+                            fdf["Date"] = pd.to_datetime(dict(year=parts[keys[0]], month=parts[keys[1]], day=parts[keys[2]]), errors="coerce")
+                            break
+                else:
+                    raise
+            # Drop any rows lacking Date or Stock, then de-duplicate and sort
+            missing_cols = [c for c in ["Date", "Stock"] if c not in fdf.columns]
+            if missing_cols:
+                # Diagnostic context for easier debugging
+                raise KeyError(
+                    "Required columns missing for sorting: "
+                    f"{missing_cols}. Available columns: {list(fdf.columns)}; "
+                    f"index names: {getattr(fdf.index, 'names', fdf.index.name)}"
+                )
+            fdf = (
+                fdf.dropna(subset=["Date", "Stock"])\
+                   .sort_values(["Date", "Stock"])\
+                   .drop_duplicates(subset=["Date","Stock"], keep="last")
+            )
+            tickers = sorted(fdf["Stock"].unique())
+
+            # 1) Prices (wide: dates × tickers)
+            # Use pivot_table with aggfunc='last' to tolerate accidental duplicate rows
+            prices_df = fdf.pivot_table(index="Date", columns="Stock", values="Close", aggfunc="last").sort_index()
+
+            # 2) Optional feature frames (avoid recomputing inside the strategy)
+            def pivot_or_none(col):
+                return (fdf.pivot_table(index="Date", columns="Stock", values=col, aggfunc="last").sort_index()
+                        if col in fdf.columns else None)
+
+            feature_frames = {"Close": prices_df}
+            rsi   = pivot_or_none("RSI")
+            macd  = pivot_or_none("MACD")
+            sma20 = pivot_or_none("SMA_20")
+            buy   = pivot_or_none("Buy")
+            sell  = pivot_or_none("Sell")
+            if rsi   is not None: feature_frames["RSI"]    = rsi
+            if macd  is not None: feature_frames["MACD"]   = macd
+            if sma20 is not None: feature_frames["SMA_20"] = sma20
+            if buy   is not None: feature_frames["Buy"]    = buy.fillna(0)
+            if sell  is not None: feature_frames["Sell"]   = sell.fillna(0)
+
+            # 3) Optional fundamentals (latest per ticker)
+            fund_df = None
+            fund_cols = [c for c in ["P/E","EPS","ROE","OperatingMargin","ReturnOnCapital",
+                                    "EarningsStability","EBIT_EV","FCF_Yield","Leverage"] if c in fdf.columns]
+            if fund_cols:
+                fund_df = (
+                    fdf.sort_values(["Stock","Date"]).groupby("Stock")[fund_cols].last().reindex(tickers)
+                )
+                if "P/E" in fund_df.columns:
+                    fund_df = fund_df.rename(columns={"P/E": "PE"})  # optimiser expects "PE"
+
+            # 4) Strategy + knobs (read from config; default to score_rank_claude)
+            method = getattr(config, 'PORTFOLIO_STRATEGY', 'score_rank_claude')
+            constraints = {"long_only": True, "max_weight": 0.15, "budget": 1.0}
+            optimiser_config = {
+                "lookback_days": 252,
+                "cov_method": "ledoit_wolf_simple",
+                "decay_rate": 0.92,               # lower → more weight to top ranks
+                "feature_frames": feature_frames, # give RSI/MACD/SMA/Buy/Sell/Close to strategy
+                "use_log_returns": True
+            }
+
+            # 5) Run optimiser → weights; store ₹ allocations for your backtester
+            print(f"🔧 Using optimiser strategy: {method}")
+            self.active_strategy = method  # store for reporting
+            weights = self.allocate_portfolio(
+                prices_df=prices_df[tickers],
+                signals_df=None,
+                fund_df=fund_df,                  # can be None
+                method=method,
+                constraints=constraints,
+                config=optimiser_config,
+            )
+
+            # Convert weights to rupee allocations (what your backtester uses)
+            self.stock_allocations = {
+                t: float(weights.get(t, 0.0)) * float(self.initial_cash) for t in tickers
+            }
 
         return filtered_ta_df
+
 
     # --------------------- BACKTESTING METHODS ---------------------
     def calculate_fee(self, trade_value):
@@ -281,14 +316,16 @@ class FilteringAndBacktesting:
         Uses standard trading terminology in logs.
         """
         df_bt = filtered_scrip_df.copy()
-        allocated_capital = self.stock_allocations.get(scrip,
-                                                   self.initial_cash / len(self.stock_allocations) if self.stock_allocations else self.initial_cash)
+        allocated_capital = self.stock_allocations.get(
+            scrip,
+            self.initial_cash / len(self.stock_allocations) if self.stock_allocations else self.initial_cash,
+        )
         available_cash = float(allocated_capital)
 
-        print(f"\n" + "="*70)
+        print("\n" + "=" * 70)
         print(f"BACKTESTING: {scrip}".center(70))
-        print("="*70)
-        
+        print("=" * 70)
+
         # Print allocation info concisely if detailed already shown, otherwise verbose
         if not self._detailed_print_shown:
             print("Capital Allocation Details:")
@@ -303,12 +340,12 @@ class FilteringAndBacktesting:
             print(f"Allocated Capital: ₹{allocated_capital:,.2f} ({allocation_pct:.1f}% of portfolio)")
 
         position_qty = 0
-        portfolio_values = []
-        positions = []
+        portfolio_values: list[float] = []
+        positions: list[int] = []
         entry_date = None
         entry_price = None
         trade_status = 'NO POSITION'
-        transactions = []
+        transactions: list[dict] = []
 
         if 'P/E' in df_bt.columns and 'EPS' in df_bt.columns:
             print(f"Fundamental Data - P/E: {df_bt['P/E'].iloc[-1]:.2f} | EPS: ₹{df_bt['EPS'].iloc[-1]:.2f}")
@@ -317,19 +354,64 @@ class FilteringAndBacktesting:
             score_info = self.stock_scores[scrip]
             print(f"Investment Score: {score_info['composite_score']:.1f}/100")
             print(f"  • Technical Analysis: {score_info['technical_score']:.1f}/100")
-            print(f"  • Signal Quality: {score_info['signal_score']:.1f}/100") 
+            print(f"  • Signal Quality: {score_info['signal_score']:.1f}/100")
             print(f"  • Price Momentum: {score_info['momentum_score']:.1f}/100")
             print(f"  • Risk Assessment: {score_info['volatility_score']:.1f}/100")
             allocation_pct = (allocated_capital / self.initial_cash) * 100.0 if self.initial_cash else 0.0
             print(f"Portfolio Weight: {allocation_pct:.1f}%")
 
-        print(f"\nTRADING ACTIVITY LOG:")
+        print("\nTRADING ACTIVITY LOG:")
         print("-" * 70)
+
+        def _fmt_date(val):
+            """Format index or value safely as dd-MMM-YYYY string."""
+            if hasattr(val, "strftime"):
+                return val.strftime("%d-%b-%Y")
+            return str(val)
 
         for idx, row in df_bt.iterrows():
             market_price = float(row['Close'])
             stock_name = row['Stock']
             trade_status = 'NO ACTION'
+
+            # Ensure we always use datetime for trade dates
+            trade_date = None
+            if 'Date' in row and pd.notna(row['Date']):
+                try:
+                    trade_date = pd.to_datetime(row['Date'])
+                except Exception:
+                    trade_date = None
+
+            # fallback: if idx is Timestamp already
+            if trade_date is None and isinstance(idx, pd.Timestamp):
+                trade_date = idx
+
+            # final fallback: try to coerce idx to datetime; else keep as-is
+            if trade_date is None:
+                try:
+                    trade_date = pd.to_datetime(idx)
+                except Exception:
+                    trade_date = idx
+
+            trade_date_str = _fmt_date(trade_date)
+            # ISO date for data outputs
+            def _fmt_iso(val, fallback_idx):
+                try:
+                    ts = pd.to_datetime(val, errors='coerce')
+                    if pd.notna(ts):
+                        return ts.strftime('%Y-%m-%d')
+                except Exception:
+                    pass
+                # Fallback to index if provided
+                try:
+                    ts2 = pd.to_datetime(fallback_idx, errors='coerce')
+                    if pd.notna(ts2):
+                        return ts2.strftime('%Y-%m-%d')
+                except Exception:
+                    pass
+                return str(val) if val is not None else str(fallback_idx)
+
+            trade_date_iso = _fmt_iso(trade_date, idx)
 
             # BUY LOGIC
             if buy_signal.loc[idx] and position_qty == 0:
@@ -342,28 +424,29 @@ class FilteringAndBacktesting:
                     if available_cash >= total_investment:
                         position_qty = shares_affordable
                         available_cash -= total_investment
-                        entry_date = idx
+                        entry_date = trade_date
                         entry_price = market_price
                         trade_status = 'LONG ENTRY'
 
-                        # Record BUY transaction
+                        # Record BUY transaction (include Revenue as NaN for schema consistency)
                         transactions.append({
-                            'Date': idx,
+                            'Date': trade_date_iso,
                             'Event': 'BUY',
                             'Stock': stock_name,
                             'Price': round(market_price, 2),
                             'Shares': position_qty,
-                            'Cost': round(gross_cost, 2),
+                            'Cost': round(gross_cost, 2),   # for capital deployed calc
+                            'Revenue': np.nan,
                             'Fee': round(brokerage, 2),
                             'Cash_After': round(available_cash, 2),
                             'Position_After': position_qty,
                             'Holding_Period': 0,
                             'Profit_%': 0.0,
-                            'Allocated_Cash': round(allocated_capital, 2)
+                            'Allocated_Cash': round(allocated_capital, 2),
                         })
 
                         if not self._detailed_print_shown:
-                            print(f"\n📈 LONG ENTRY - {idx:%d-%b-%Y}")
+                            print(f"\n📈 LONG ENTRY - {trade_date_str}")
                             print(f"   Security: {stock_name}")
                             print(f"   Entry Price: ₹{market_price:.2f}")
                             print(f"   Quantity: {position_qty:,} shares")
@@ -372,15 +455,16 @@ class FilteringAndBacktesting:
                             print(f"   Total Investment: ₹{total_investment:,.2f}")
                             print(f"   Cash Remaining: ₹{available_cash:,.2f}")
                         else:
-                            print(f"📈 {idx:%d-%b-%Y} | LONG ENTRY | {position_qty:,} shares @ ₹{market_price:.2f} | Cash: ₹{available_cash:,.0f}")
-
+                            print(
+                                f"📈 {trade_date_str} | LONG ENTRY | {position_qty:,} shares @ ₹{market_price:.2f} | Cash: ₹{available_cash:,.0f}"
+                            )
                 else:
-                    print(f"⚠️ {idx:%d-%b-%Y} | Insufficient funds for {stock_name} @ ₹{market_price:.2f}")
+                    print(f"⚠️ {trade_date_str} | Insufficient funds for {stock_name} @ ₹{market_price:.2f}")
 
             # SELL LOGIC
             elif sell_signal.loc[idx] and position_qty > 0:
                 if entry_date is not None and entry_price is not None:
-                    holding_period = (idx - entry_date).days
+                    holding_period = (trade_date - entry_date).days
                     unrealized_pnl_pct = ((market_price - entry_price) / entry_price) * 100.0
                 else:
                     holding_period = 0
@@ -392,16 +476,16 @@ class FilteringAndBacktesting:
                     brokerage = self.calculate_fee(gross_proceeds)
                     net_proceeds = gross_proceeds - brokerage
                     available_cash += net_proceeds
-                    
+
                     # Calculate realized P&L
                     total_cost = position_qty * entry_price + self.calculate_fee(position_qty * entry_price)
                     realized_pnl = net_proceeds - total_cost
                     realized_pnl_pct = (realized_pnl / total_cost) * 100.0
-                    
+
                     trade_status = 'LONG EXIT'
 
                     if not self._detailed_print_shown:
-                        print(f"\n📉 LONG EXIT - {idx:%d-%b-%Y}")
+                        print(f"\n📉 LONG EXIT - {trade_date_str}")
                         print(f"   Security: {stock_name}")
                         print(f"   Exit Price: ₹{market_price:.2f}")
                         print(f"   Quantity: {position_qty:,} shares")
@@ -412,28 +496,33 @@ class FilteringAndBacktesting:
                         print(f"   Realized P&L: ₹{realized_pnl:,.2f} ({realized_pnl_pct:+.2f}%)")
                         print(f"   Total Cash: ₹{available_cash:,.2f}")
                     else:
-                        print(f"📉 {idx:%d-%b-%Y} | LONG EXIT | {position_qty:,} shares @ ₹{market_price:.2f} | P&L: ₹{realized_pnl:+.0f} ({realized_pnl_pct:+.1f}%) | Cash: ₹{available_cash:,.0f}")
+                        print(
+                            f"📉 {trade_date_str} | LONG EXIT | {position_qty:,} shares @ ₹{market_price:.2f} | P&L: ₹{realized_pnl:+.0f} ({realized_pnl_pct:+.1f}%) | Cash: ₹{available_cash:,.0f}"
+                        )
 
                     transactions.append({
-                        'Date': idx,
+                        'Date': trade_date_iso,
                         'Event': 'SELL',
                         'Stock': stock_name,
                         'Price': round(market_price, 2),
                         'Shares': position_qty,
-                        'Revenue': round(gross_proceeds, 2),
+                        'Cost': np.nan,
+                        'Revenue': round(gross_proceeds, 2),   # for capital deployed calc
                         'Fee': round(brokerage, 2),
                         'Cash_After': round(available_cash, 2),
                         'Position_After': 0,
                         'Holding_Period': holding_period,
                         'Profit_%': round(unrealized_pnl_pct, 2),
-                        'Allocated_Cash': round(allocated_capital, 2)
+                        'Allocated_Cash': round(allocated_capital, 2),
                     })
 
                     position_qty = 0
                     entry_date = None
                     entry_price = None
                 else:
-                    print(f"⏳ {idx:%d-%b-%Y} | Position held | Days: {holding_period} | Unrealized P&L: {unrealized_pnl_pct:+.1f}% | Conditions not met")
+                    print(
+                        f"⏳ {trade_date_str} | Position held | Days: {holding_period} | Unrealized P&L: {unrealized_pnl_pct:+.1f}% | Conditions not met"
+                    )
 
             # Calculate current portfolio value for this stock
             current_position_value = position_qty * market_price
@@ -445,6 +534,7 @@ class FilteringAndBacktesting:
             df_bt.loc[idx, 'Position'] = round(position_qty, 2)
             df_bt.loc[idx, 'balance_cash'] = round(available_cash, 2)
             df_bt.loc[idx, 'trade_position'] = trade_status
+            df_bt.loc[idx, 'Trade_Date'] = trade_date
 
         df_bt['Portfolio_Value'] = portfolio_values
         df_bt['Position'] = positions
@@ -454,16 +544,17 @@ class FilteringAndBacktesting:
         final_cash = float(df_bt.loc[last_idx, 'balance_cash'])
         final_position = int(df_bt.loc[last_idx, 'Position'])
         current_market_price = float(df_bt.loc[last_idx, 'Close'])
-        
+
         final_position_value = final_position * current_market_price
         final_portfolio_value = final_cash + final_position_value
-        
+
         total_return_amount = final_portfolio_value - allocated_capital
         total_return_pct = (total_return_amount / allocated_capital) * 100.0 if allocated_capital else 0.0
 
-        print(f"\n" + "-"*70)
-        print(f"POSITION SUMMARY as of {last_idx:%d-%b-%Y}")
-        print(f"-"*70)
+        print("\n" + "-" * 70)
+        last_date = df_bt.loc[last_idx, 'Trade_Date'] if 'Trade_Date' in df_bt.columns else last_idx
+        print(f"POSITION SUMMARY as of {_fmt_date(last_date)}")
+        print("-" * 70)
         print(f"Current Market Price: ₹{current_market_price:.2f}")
         print(f"Position: {final_position:,} shares")
         print(f"Position Value: ₹{final_position_value:,.2f}")
@@ -486,7 +577,7 @@ class FilteringAndBacktesting:
 
         # Update global portfolio value
         prev_portfolio = self.portfolio_value
-        print(f"\nGLOBAL PORTFOLIO UPDATE:")
+        print("\nGLOBAL PORTFOLIO UPDATE:")
         print(f"Previous Portfolio Value: ₹{prev_portfolio:,.2f}")
         self.portfolio_value += final_portfolio_value
         print(f"Added from {scrip}: ₹{final_portfolio_value:,.2f}")
@@ -497,10 +588,26 @@ class FilteringAndBacktesting:
         # Transaction log
         transactions_df = pd.DataFrame(transactions)
         if not transactions_df.empty:
+            # Ensure schema consistency: always have Cost + Revenue columns
+            if 'Cost' not in transactions_df.columns:
+                transactions_df['Cost'] = np.nan
+            if 'Revenue' not in transactions_df.columns:
+                transactions_df['Revenue'] = np.nan
+
+            # Normalize Date column to consistent ISO format
+            try:
+                transactions_df['Date'] = pd.to_datetime(transactions_df['Date'], errors='coerce')
+                # Always export in ISO format for consistency
+                transactions_df['Date'] = transactions_df['Date'].dt.strftime('%Y-%m-%d')
+                print("[DEBUG] Sample transaction dates (after ISO normalization):")
+                print(transactions_df['Date'].head())
+            except Exception as e:
+                print(f"[WARNING] Could not normalize transaction dates: {e}")
+
             transactions_df.sort_values(by='Date', inplace=True)
-            print(f"\n" + "="*60)
+            print("\n" + "=" * 60)
             print("TRANSACTION HISTORY".center(60))
-            print("="*60)
+            print("=" * 60)
             with pd.option_context('display.float_format', '{:.2f}'.format):
                 print(transactions_df.to_string(index=False))
 
@@ -527,11 +634,16 @@ class FilteringAndBacktesting:
         backtested_transactions_df = pd.concat(self.backtested_transactions_df_list) if self.backtested_transactions_df_list else pd.DataFrame()
 
         if not backtested_scrip_df.empty:
-            backtested_scrip_df.reset_index(inplace=True)
-            backtested_scrip_df['Date'] = pd.to_datetime(backtested_scrip_df['Date'], dayfirst=True)
-            backtested_scrip_df['Date'] = backtested_scrip_df['Date'].dt.strftime('%d-%m-%Y')
-            backtested_scrip_df.rename(columns={'index': 'Date'}, inplace=True)
-            backtested_scrip_df.to_excel("backtested_scrips.xlsx", sheet_name=f"{config.ACTIVE_FILTER}", index=False)
+            # Ensure single Date column without duplicates
+            backtested_scrip_df = backtested_scrip_df.reset_index(drop=True)
+            if 'Date' in backtested_scrip_df.columns:
+                backtested_scrip_df['Date'] = pd.to_datetime(
+                    backtested_scrip_df['Date'], errors="coerce", dayfirst=True
+                )
+                backtested_scrip_df['Date'] = backtested_scrip_df['Date'].dt.strftime('%d-%b-%Y')
+            backtested_scrip_df.to_excel(
+                "backtested_scrips.xlsx", sheet_name=f"{config.ACTIVE_FILTER}", index=False
+            )
 
         if not backtested_transactions_df.empty:
             backtested_transactions_df.reset_index(inplace=True)
@@ -689,7 +801,7 @@ class FilteringAndBacktesting:
                     price = float(transaction.get('Price', 0.0) or 0.0)
                     
                     if event_type == 'BUY' and quantity > 0:
-                        total_cost = float(transaction.get('Revenue', 0.0) or 0.0)  # Actually cost for BUY
+                        total_cost = float(transaction.get('Cost', 0.0) or 0.0)  # Actually cost for BUY
                         brokerage = float(transaction.get('Fee', 0.0) or 0.0)
                         buy_positions.append({
                             'quantity': quantity,
@@ -840,7 +952,7 @@ class FilteringAndBacktesting:
         # Create summary dataframe for Excel export
         global_summary_df = pd.DataFrame({
             "Metric": [
-                "STRATEGY_NAME", "MIN_HOLDING_PERIOD_DAYS", "MIN_PROFIT_PERCENTAGE",
+                "STRATEGY_NAME", "PORTFOLIO_STRATEGY", "MIN_HOLDING_PERIOD_DAYS", "MIN_PROFIT_PERCENTAGE",
                 "NUMBER_OF_POSITIONS", "INVESTMENT_APPROACH", "INITIAL_CAPITAL",
                 "Final Portfolio Value", "Capital Deployed", "Total Return (Amount)", "Total Return (%)",
                 "Total Brokerage Paid", "Buy Transactions", "Sell Transactions",
@@ -848,6 +960,7 @@ class FilteringAndBacktesting:
             ],
             "Value": [
                 config.ACTIVE_FILTER,
+                getattr(self, 'active_strategy', 'unknown'),
                 MIN_HOLDING_PERIOD,
                 MIN_PROFIT_PERCENTAGE,
                 num_positions,
@@ -882,8 +995,7 @@ class FilteringAndBacktesting:
             allocation_summary.append({
                 'Security': scrip,
                 'Initial_Allocation': round(allocation_amount, 2),
-                'Allocation_%': round(allocation_pct, 2),
-                'Investment_Score': round(score, 1),
+                'Allocation_%': round(allocation_pct, 2),                
                 'Current_Price': round(current_price, 2),
                 'Position_Qty': position,
                 'Market_Value': round(market_value, 2),
@@ -917,7 +1029,13 @@ class FilteringAndBacktesting:
             # Transaction History Sheet
             if not backtested_transactions_df.empty:
                 tx_export = backtested_transactions_df.copy()
-                
+
+                # Ensure schema consistency: always have Cost + Revenue columns
+                if 'Cost' not in tx_export.columns:
+                    tx_export['Cost'] = np.nan
+                if 'Revenue' not in tx_export.columns:
+                    tx_export['Revenue'] = np.nan
+
                 # Handle duplicate Date columns before datetime conversion
                 if 'Date' in tx_export.columns:
                     date_columns = [col for col in tx_export.columns if col == 'Date']
@@ -928,15 +1046,18 @@ class FilteringAndBacktesting:
                         tx_export = tx_export.loc[:, ~(tx_export.columns == 'Date')]
                         # Add single Date column back
                         tx_export['Date'] = date_data
-                
-                # Now safely convert to datetime
+
+                # Now safely convert to datetime and format to ISO
                 try:
-                    tx_export['Date'] = pd.to_datetime(tx_export['Date'], errors='coerce').dt.strftime('%d-%b-%Y')
+                    tx_export['Date'] = pd.to_datetime(tx_export['Date'], errors='coerce')
+                    tx_export['Date'] = tx_export['Date'].dt.strftime('%Y-%m-%d')
+                    print("[DEBUG] Sample export dates (after ISO normalization):")
+                    print(tx_export['Date'].head())
                 except Exception as e:
                     print(f"Warning: Date formatting error in transactions export: {e}")
                     # Fallback: keep original date format
                     pass
-                
+
                 tx_export.to_excel(writer, sheet_name="Transaction_History", index=False)
             
             # Summary only for quick reference
@@ -992,9 +1113,36 @@ class FilteringAndBacktesting:
                 from dashboard_integration import TradingDashboard
                 combined_scrips_df = pd.concat(self.backtested_scrip_df_list, ignore_index=True)
                 combined_transactions_df = pd.concat(self.backtested_transactions_df_list, ignore_index=True)
-                dashboard = TradingDashboard(combined_scrips_df, combined_transactions_df)
-                dashboard.launch_dashboard()
-                dashboard.export_dashboard_data()
+                # 🔧 Ensure Date is normalized for dashboard JSON
+                if 'Date' in combined_scrips_df.columns:
+                    try:
+                        combined_scrips_df['Date'] = pd.to_datetime(combined_scrips_df['Date'], errors='coerce')
+                        combined_scrips_df['Date'] = combined_scrips_df['Date'].dt.strftime('%Y-%m-%d')
+                    except Exception as e:
+                        print(f"[WARNING] Could not normalize scrip dates for dashboard: {e}")
+
+                if 'Date' in combined_transactions_df.columns:
+                    try:
+                        combined_transactions_df['Date'] = pd.to_datetime(combined_transactions_df['Date'], errors='coerce')
+                        combined_transactions_df['Date'] = combined_transactions_df['Date'].dt.strftime('%Y-%m-%d')
+                    except Exception as e:
+                        print(f"[WARNING] Could not normalize transaction dates for dashboard: {e}")
+                # Use config strategy if available, fallback to active_strategy, then default
+                try:
+                    from support_files import updated_config as cfg
+                    strategy_name = getattr(cfg, 'PORTFOLIO_STRATEGY', None)
+                except Exception:
+                    strategy_name = None
+                if not strategy_name:
+                    strategy_name = getattr(self, 'active_strategy', None) or 'score_rank_claude'
+                dashboard = TradingDashboard(
+                    combined_scrips_df,
+                    combined_transactions_df,
+                    strategy_name=strategy_name
+                )
+                # Always export JSON + HTML together, then open from the same folder
+                dashboard.export_dashboard_data(export_dir="output_data/dashboard_exports")
+                dashboard.launch_dashboard(export_dir="output_data/dashboard_exports")
                 print("📊 Interactive dashboard launched successfully!")
             except Exception as e:
                 print(f"⚠️ Dashboard creation failed: {e}")      

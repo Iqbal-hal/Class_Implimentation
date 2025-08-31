@@ -9,8 +9,109 @@ from pathlib import Path
 
 import support_files.updated_config as config
 
+# Utility: Safe date conversion and dashboard file export
+def _safe_date_convert(date_val):
+    """Convert dates safely into ISO format for dashboard export."""
+    try:
+        if isinstance(date_val, str):
+            ts = pd.to_datetime(date_val, errors="coerce")
+        else:
+            ts = pd.to_datetime(date_val, errors="coerce")
+        if pd.notna(ts):
+            return ts.strftime("%Y-%m-%d")
+    except Exception:
+        pass
+    return str(date_val)
+
+def export_dashboard_data(all_stock_data, output_dir="output_data"):
+    """Export stock data into JSON for dashboard with proper Plotly format."""
+    os.makedirs(output_dir, exist_ok=True)
+    export_path = os.path.join(output_dir, "trading_data.json")
+
+    all_charts = {}
+
+    for stock, stock_df in all_stock_data.items():
+        df = stock_df.copy()
+        # Ensure ISO date strings and drop bad dates
+        df["Date"] = pd.to_datetime(df["Date"], errors="coerce").dt.strftime("%Y-%m-%d")
+        df = df.dropna(subset=["Date"])  # drop rows with invalid dates
+
+        chart_data = {
+            "data": [
+                {
+                    "type": "candlestick",
+                    "x": df["Date"].tolist(),
+                    "open": df.get("Open", pd.Series(dtype=float)).tolist(),
+                    "high": df.get("High", pd.Series(dtype=float)).tolist(),
+                    "low": df.get("Low", pd.Series(dtype=float)).tolist(),
+                    "close": df.get("Close", pd.Series(dtype=float)).tolist(),
+                    "name": stock,
+                }
+            ],
+            "layout": {
+                "title": f"{stock} Candlestick Chart",
+                "xaxis": {
+                    "title": "Date",
+                    "rangeslider": {"visible": False},
+                    "anchor": "y"
+                },
+                "yaxis": {
+                    "title": "Price",
+                    "anchor": "x"
+                },
+            },
+        }
+
+        all_charts[stock] = chart_data
+
+    with open(export_path, "w", encoding="utf-8") as f:
+        json.dump(all_charts, f, indent=2)
+
+    # Also drop a copy next to the launched HTML (output_dir/dashboard_exports)
+    export_dir2 = os.path.join(output_dir, "dashboard_exports")
+    try:
+        os.makedirs(export_dir2, exist_ok=True)
+        export_path2 = os.path.join(export_dir2, "trading_data.json")
+        with open(export_path2, "w", encoding="utf-8") as f2:
+            json.dump(all_charts, f2, indent=2)
+        print(f"[OK] Dashboard JSON exported → {export_path} and {export_path2}")
+    except Exception:
+        # If this best-effort copy fails, proceed silently
+        print(f"[OK] Dashboard JSON exported → {export_path}")
+
+def export_dashboard_files(html_content, trading_data):
+    """Export dashboard HTML and JSON to dashboard_exports with safe date normalization."""
+    export_dir = os.path.join(os.getcwd(), "dashboard_exports")
+    os.makedirs(export_dir, exist_ok=True)
+
+    html_path = os.path.join(export_dir, "trading_dashboard.html")
+    json_path = os.path.join(export_dir, "trading_data.json")
+
+    # Normalize dates before export (handle a simple mapping of stock->list[dict])
+    try:
+        for stock, entries in (trading_data.items() if isinstance(trading_data, dict) else []):
+            if isinstance(entries, list):
+                for entry in entries:
+                    if isinstance(entry, dict) and "Date" in entry:
+                        entry["Date"] = _safe_date_convert(entry["Date"])
+    except Exception:
+        # Best-effort normalization; proceed even if structure differs
+        pass
+
+    # Save HTML
+    with open(html_path, "w", encoding="utf-8") as f:
+        f.write(html_content)
+
+    # Save JSON
+    with open(json_path, "w", encoding="utf-8") as f:
+        json.dump(trading_data, f, indent=4)
+
+    print(f"[OK] Dashboard exported to {export_dir}")
+    print(f"   - HTML Dashboard: {html_path}")
+    print(f"   - Trading Data: {json_path}")
+
 class TradingDashboard:
-    def __init__(self, backtested_scrips_df, backtested_transactions_df):
+    def __init__(self, backtested_scrips_df, backtested_transactions_df, strategy_name=None):
         """
         Initialize the Trading Dashboard with backtested data.
         
@@ -20,6 +121,7 @@ class TradingDashboard:
         """
         self.backtested_scrips_df = backtested_scrips_df
         self.backtested_transactions_df = backtested_transactions_df
+        self.strategy_name = strategy_name
         self.dashboard_data = {}
         self.prepare_dashboard_data()
     
@@ -44,8 +146,32 @@ class TradingDashboard:
             
             # Sort by date
             if 'Date' in stock_df.columns:
-                stock_df['Date'] = pd.to_datetime(stock_df['Date'], dayfirst=True, errors='coerce')
-                stock_df = stock_df.sort_values('Date')
+                # Parse Date in ISO (YYYY-MM-DD) only
+                stock_df['Date'] = pd.to_datetime(stock_df['Date'], errors='coerce', dayfirst=False)
+
+                # Drop rows where date is missing
+                stock_df = stock_df.dropna(subset=['Date'])
+
+                # Ensure sorted by Date
+                stock_df = stock_df.sort_values(by='Date').reset_index(drop=True)
+
+                # Debug: show sample dates to confirm parsing worked
+                print('[DEBUG] Parsed dashboard dates (first 5):')
+                print(stock_df['Date'].head())
+
+                # Ensure Date column is fully cleaned and ISO formatted
+                stock_df['Date'] = pd.to_datetime(stock_df['Date'], errors='coerce')
+                stock_df['Date'] = stock_df['Date'].ffill()  # fill NaNs forward
+
+                # Export dates as ISO strings for JSON and Excel compatibility
+                stock_df['Date'] = stock_df['Date'].dt.strftime('%Y-%m-%d')
+
+                # Force conversion to string type to avoid JS parse issues
+                stock_df['Date'] = stock_df['Date'].astype(str)
+
+                # Debug check for JSON export
+                print('[DEBUG] Sample JSON export dates (after ISO conversion):')
+                print(stock_df['Date'].head())
             else:
                 # Use index as date if Date column is not available
                 stock_df = stock_df.sort_index()
@@ -94,7 +220,7 @@ class TradingDashboard:
                         if isinstance(trans_date, pd.Timestamp):
                             date_str = trans_date.strftime('%Y-%m-%d')
                         else:
-                            date_str = pd.to_datetime(str(trans_date), dayfirst=True).strftime('%Y-%m-%d')
+                            date_str = pd.to_datetime(str(trans_date), errors='coerce').strftime('%Y-%m-%d')
                         
                         action = str(row.get('Event', row.get('Action', 'UNKNOWN'))).upper()
                         price = float(row.get('Price', 0))
@@ -132,6 +258,9 @@ class TradingDashboard:
             else:
                 transaction_data[stock] = []
         
+        # Persist both granular and combined structures
+        self.stock_data = stock_data
+        self.transactions_data = transaction_data
         self.dashboard_data = {
             'stockData': stock_data,
             'transactionData': transaction_data
@@ -643,9 +772,19 @@ class TradingDashboard:
             html_template = html_template.replace('STOCK_DATA_PLACEHOLDER', stock_data_json)
             html_template = html_template.replace('TRANSACTION_DATA_PLACEHOLDER', transaction_data_json)
         
+        # If a strategy name was provided, insert a banner under the LIVE DATA banner
+        if getattr(self, 'strategy_name', None):
+            strategy_banner = f"""
+        <div class=\"real-data-banner\" style=\"background: linear-gradient(45deg, #3498db, #2980b9);\">
+            🧭 <strong>Optimiser Strategy</strong>: {self.strategy_name}
+        </div>
+"""
+            marker = "</div>\n        \n        <div class=\"controls\">"
+            html_template = html_template.replace("</div>\n        \n        <div class=\"controls\">", f"</div>\n{strategy_banner}        \n        <div class=\\\"controls\\\">", 1)
+        
         return html_template
     
-    def launch_dashboard(self, filename='trading_dashboard.html', auto_open=True):
+    def launch_dashboard(self, export_dir='output_data/dashboard_exports', filename='trading_dashboard.html', auto_open=True):
         """
         Create and launch the dashboard in the default web browser.
         """
@@ -655,14 +794,13 @@ class TradingDashboard:
             # Create HTML with embedded data
             html_content = self.create_dashboard_html(include_data=True)
             
-            # Save to file
-            # ensure exports are written into the output_data folder (relative to this package)
+            # Save to file under the provided export_dir
             try:
                 pkg_dir = Path(__file__).resolve().parent
                 os.chdir(pkg_dir)
             except Exception:
                 pass
-            out_dir = Path('output_data')
+            out_dir = Path(export_dir)
             out_dir.mkdir(parents=True, exist_ok=True)
             file_path = out_dir / filename
             with open(file_path, 'w', encoding='utf-8') as f:
@@ -681,48 +819,63 @@ class TradingDashboard:
             print(f"❌ Error launching dashboard: {e}")
             return None
 
-    def export_dashboard_data(self, export_dir='/dashboard_exports'):
+    def export_dashboard_data(self, export_dir='output_data/dashboard_exports'):
         """
-        Export all dashboard data and files to a directory.
+        Export dashboard HTML and JSON to a directory, injecting data into the template
+        and ensuring all dates are ISO formatted.
         """
         try:
-            # write exports under output_data/export_dir for consistency with other outputs
+            # Work from the module directory
             try:
                 pkg_dir = Path(__file__).resolve().parent
                 os.chdir(pkg_dir)
             except Exception:
                 pass
-            base_out = Path('output_data')
-            base_out.mkdir(exist_ok=True)
-            export_path = base_out / export_dir
-            export_path.mkdir(parents=True, exist_ok=True)
-            
-            # Save data as JSON
-            data_file = export_path / 'trading_data.json'
-            with open(data_file, 'w', encoding='utf-8') as f:
-                json.dump(self.dashboard_data, f, indent=2, default=str)
-            
-            # Create standalone HTML
-            html_file = export_path / 'trading_dashboard.html'
-            html_content = self.create_dashboard_html(include_data=True)
-            with open(html_file, 'w', encoding='utf-8') as f:
+
+            os.makedirs(export_dir, exist_ok=True)
+            export_path_html = os.path.join(export_dir, 'trading_dashboard.html')
+            export_path_json = os.path.join(export_dir, 'trading_data.json')
+
+            # Normalize all dates → ISO
+            def iso_date(val):
+                try:
+                    return pd.to_datetime(val, errors='coerce').strftime('%Y-%m-%d')
+                except Exception:
+                    return str(val)
+
+            export_data = {
+                stock: [
+                    {**row, 'Date': iso_date(row.get('Date', ''))}
+                    for row in data
+                ]
+                for stock, data in self.stock_data.items()
+            }
+
+            # Write JSON (for debugging/external use)
+            with open(export_path_json, 'w', encoding='utf-8') as f:
+                json.dump(export_data, f, indent=2)
+
+            # Inject JSON into HTML template
+            with open('trading_dashboard.html', 'r', encoding='utf-8') as f:
+                html_template = f.read()
+
+            html_content = html_template.replace(
+                'STOCK_DATA_PLACEHOLDER', json.dumps(export_data)
+            ).replace(
+                'TRANSACTION_DATA_PLACEHOLDER', json.dumps(self.transactions_data)
+            )
+
+            with open(export_path_html, 'w', encoding='utf-8') as f:
                 f.write(html_content)
-            
-            # Export raw CSV data
-            if not self.backtested_scrips_df.empty:
-                csv_file = export_path / 'backtested_data.csv'
-                self.backtested_scrips_df.to_csv(csv_file, index=False)
-            
-            if not self.backtested_transactions_df.empty:
-                trans_file = export_path / 'transactions.csv'
-                self.backtested_transactions_df.to_csv(trans_file, index=False)
-            
-            print(f"✅ Dashboard exported to '{export_path}' directory")
-            print(f"   - HTML Dashboard: {html_file}")
-            print(f"   - Trading Data: {data_file}")
-            
-            return str(export_path)
-            
+
+            print(f"[OK] Dashboard exported: {export_path_html}")
+            print(f"[OK] JSON exported: {export_path_json}")
+
+            if 'STOCK_DATA_PLACEHOLDER' in html_content:
+                print('[WARNING] JSON injection failed — placeholder still present!')
+
+            return export_dir
+
         except Exception as e:
             print(f"❌ Error exporting dashboard: {e}")
             return None

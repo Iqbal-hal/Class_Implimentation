@@ -50,7 +50,7 @@ FILTER_RECOMMENDATIONS = {
 }
 
 # Active configuration parameters - Updated with enhanced filter
-ACTIVE_FILTER = 'filter_ensemble_weighted'
+ACTIVE_FILTER = 'filter_momentum_with_support_resistance'
 FILTER_ENABLED = True
 LOGGING_ENABLED = True
 ENABLE_DETAILED_LOGGING = True
@@ -94,6 +94,7 @@ REQUIRE_TREND_CONFIRMATION = True
 ENABLE_SECTOR_DIVERSIFICATION = True
 MAX_POSITIONS_PER_SECTOR = 3
 REBALANCING_FREQUENCY = 'weekly'  # 'daily', 'weekly', 'monthly'
+PORTFOLIO_STRATEGY = 'legacy_risk_weighted'
 
 # Explicit exports for clean namespace
 __all__ = [
@@ -112,7 +113,8 @@ __all__ = [
     'POSITION_SIZING_ENABLED',
     'MAX_POSITION_SIZE',
     'ENSEMBLE_WEIGHTS',
-    'MIN_SIGNAL_STRENGTH'
+    'MIN_SIGNAL_STRENGTH',
+    'PORTFOLIO_STRATEGY'
 ]
 
 # Maintain original import structure for compatibility
