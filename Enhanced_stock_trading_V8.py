@@ -1140,10 +1140,14 @@ class FilteringAndBacktesting:
                     combined_transactions_df,
                     strategy_name=strategy_name
                 )
-                # Always export JSON + HTML together, then open from the same folder
-                dashboard.export_dashboard_data(export_dir="output_data/dashboard_exports")
-                dashboard.launch_dashboard(export_dir="output_data/dashboard_exports")
-                print("📊 Interactive dashboard launched successfully!")
+                # Export JSON for Streamlit dashboard and provide launch instructions
+                export_dir = "output_data/dashboard_exports"
+                dashboard.export_dashboard_data(export_dir=export_dir)
+                json_path = os.path.join(export_dir, "trading_data.json")
+                print(f"[OK] Dashboard data exported: {json_path}")
+                print("[ROCKET] To launch interactive dashboard, run:")
+                print("   streamlit run streamlit_dashboard.py")
+                print("[CHART] Interactive Streamlit dashboard ready!")
             except Exception as e:
                 print(f"⚠️ Dashboard creation failed: {e}")      
 

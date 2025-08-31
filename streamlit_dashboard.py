@@ -18,6 +18,9 @@ except Exception as _err:
         print(f"  {i}: {p}")
 
 import streamlit as st
+import json
+import pandas as pd
+import plotly.express as px
 import importlib
 import re
 import support_files.updated_config as config_module
@@ -274,3 +277,104 @@ if st.button("Run Backtest Now") or (mode=="Edit, Save & Run Backtest" and run_b
 
 st.markdown("---")
 st.caption("This dashboard writes minimal changes to support_files/updated_config.py and does not alter core backtest logic. If you prefer not to run long backtests from the UI, uncheck the run option.")
+
+# ==========================
+# Trading Data Viewer (JSON)
+# ==========================
+st.header("\U0001F4C8 Trading Data Viewer")
+st.write("Loads OHLC data exported to output_data/dashboard_exports/trading_data.json and plots per-stock series.")
+
+def _to_df_from_stock_rows(obj: dict) -> pd.DataFrame:
+    """Schema A: { stock: [ {date, open, high, low, close, volume, ...}, ... ], ... }"""
+    records = []
+    for stock, rows in (obj or {}).items():
+        if not isinstance(rows, list):
+            continue
+        for r in rows:
+            if not isinstance(r, dict):
+                continue
+            rec = {
+                'Stock': stock,
+                'Date': r.get('Date') or r.get('date'),
+                'Open': r.get('Open', r.get('open')),
+                'High': r.get('High', r.get('high')),
+                'Low': r.get('Low', r.get('low')),
+                'Close': r.get('Close', r.get('close')),
+                'Volume': r.get('Volume', r.get('volume')),
+            }
+            records.append(rec)
+    if not records:
+        return pd.DataFrame()
+    df = pd.DataFrame.from_records(records)
+    # Normalize dates to string YYYY-MM-DD
+    if 'Date' in df.columns:
+        df['Date'] = pd.to_datetime(df['Date'], errors='coerce').dt.strftime('%Y-%m-%d')
+    return df
+
+def _to_df_from_plotly(obj: dict) -> pd.DataFrame:
+    """Schema B: { stock: { data: [ {type:candlestick, x, open, high, low, close, ...} ], layout: {...} }, ... }"""
+    frames = []
+    for stock, chart in (obj or {}).items():
+        try:
+            traces = (chart or {}).get('data') or []
+            trace = traces[0] if traces else None
+            if not trace:
+                continue
+            x = trace.get('x') or []
+            o = trace.get('open') or []
+            h = trace.get('high') or []
+            l = trace.get('low') or []
+            c = trace.get('close') or []
+            n = min(len(x), len(o), len(h), len(l), len(c))
+            if n == 0:
+                continue
+            df = pd.DataFrame({
+                'Stock': [stock]*n,
+                'Date': pd.to_datetime(x[:n], errors='coerce').strftime('%Y-%m-%d'),
+                'Open': o[:n],
+                'High': h[:n],
+                'Low': l[:n],
+                'Close': c[:n],
+            })
+            frames.append(df)
+        except Exception:
+            continue
+    if not frames:
+        return pd.DataFrame()
+    return pd.concat(frames, ignore_index=True)
+
+json_path = os.path.join('output_data', 'dashboard_exports', 'trading_data.json')
+if not os.path.exists(json_path):
+    st.info("No trading_data.json found yet. Run the backtest to export it (see console instructions).")
+else:
+    try:
+        with open(json_path, 'r', encoding='utf-8') as f:
+            trading_obj = json.load(f)
+        # Try schema A first, then schema B
+        data_df = _to_df_from_stock_rows(trading_obj)
+        if data_df.empty:
+            data_df = _to_df_from_plotly(trading_obj)
+
+        if data_df.empty:
+            st.warning("Could not parse trading_data.json into a table. Check file format.")
+        else:
+            stocks = sorted(data_df['Stock'].dropna().unique().tolist())
+            if not stocks:
+                st.warning("No stocks found in trading data.")
+            else:
+                colA, colB = st.columns([1, 3])
+                with colA:
+                    sel = st.selectbox("Select Stock", stocks)
+                    st.metric("Total Records", len(data_df))
+                    st.metric("Unique Stocks", len(stocks))
+                with colB:
+                    st.subheader(f"\U0001F4C8 {sel} Close Price")
+                    sub = data_df[data_df['Stock'] == sel].copy()
+                    sub = sub.sort_values('Date')
+                    fig = px.line(sub, x='Date', y='Close', title=f"{sel} - Close Price")
+                    st.plotly_chart(fig, use_container_width=True)
+
+            with st.expander("Preview Data", expanded=False):
+                st.dataframe(data_df.head(200), use_container_width=True)
+    except Exception as e:
+        st.error(f"Failed to load trading_data.json: {e}")
