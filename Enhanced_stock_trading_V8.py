@@ -114,15 +114,28 @@ class FilteringAndBacktesting:
                     _df = df.copy()
                     _df["Stock"] = scrip
                     filtered_ta_df_list[i] = _df
-                filtered_ta_df = pd.concat(filtered_ta_df_list, ignore_index=True)
+                # Safer concatenation with error handling
+                try:
+                    filtered_ta_df = pd.concat(filtered_ta_df_list, ignore_index=True)
+                except Exception as concat_error:
+                    print(f"Concatenation error: {concat_error}")
+                    # Create minimal DataFrame with required columns to prevent downstream errors
+                    filtered_ta_df = pd.DataFrame(columns=['Stock', 'Date', 'Open', 'High', 'Low', 'Close', 'Buy', 'Sell'])
             else:
-                filtered_ta_df = pd.DataFrame()
+                # Create empty DataFrame with required columns instead of completely empty
+                filtered_ta_df = pd.DataFrame(columns=['Stock', 'Date', 'Open', 'High', 'Low', 'Close', 'Buy', 'Sell'])
         except Exception as e:
             print(f"Error in screening process: {e}")
-            filtered_ta_df = pd.DataFrame()
+            # Ensure fallback DataFrame has required columns
+            filtered_ta_df = pd.DataFrame(columns=['Stock', 'Date', 'Open', 'High', 'Low', 'Close', 'Buy', 'Sell'])
 
         print(f"Securities Passed Screening: {len(scrips_list)}")
         print(f"Filter Success Rate: {len(scrips_list)/len(master_scrips_list)*100:.1f}%")
+
+        # Additional safety check before returning
+        if filtered_ta_df.empty:
+            print("⚠️ Warning: No securities passed the screening filter.")
+            return pd.DataFrame(columns=['Stock', 'Date', 'Open', 'High', 'Low', 'Close', 'Buy', 'Sell'])
 
         if not filtered_ta_df.empty:
             # --- NEW MODE: optimiser does all scoring (score_rank_claude) ---
@@ -626,11 +639,23 @@ class FilteringAndBacktesting:
         if 'Stock' not in filtered_scrips_df.columns:
             print("⚠️ WARNING: 'Stock' column missing in filtered_scrips_df. Attempting to restore...")
             try:
+                # Try to restore from index
                 if getattr(filtered_scrips_df.index, 'name', None) == 'Stock':
                     filtered_scrips_df = filtered_scrips_df.reset_index()
+                # Try to restore from MultiIndex
+                elif hasattr(filtered_scrips_df.index, 'names') and 'Stock' in (filtered_scrips_df.index.names or []):
+                    filtered_scrips_df = filtered_scrips_df.reset_index()
                 else:
-                    raise KeyError("'Stock' column not found in filtered_scrips_df")
+                    # If DataFrame is empty, return early to avoid KeyError
+                    if filtered_scrips_df.empty:
+                        print("⚠️ No data to backtest - filtered DataFrame is empty.")
+                        return pd.DataFrame(), pd.DataFrame()
+                    else:
+                        raise KeyError("'Stock' column not found and cannot be restored from index")
             except Exception as _e:
+                if filtered_scrips_df.empty:
+                    print("⚠️ No data to backtest - filtered DataFrame is empty.")
+                    return pd.DataFrame(), pd.DataFrame()
                 raise
 
         for scrip, filtered_scrip_df in scrip_extractor(filtered_scrips_df):
@@ -672,7 +697,8 @@ class FilteringAndBacktesting:
             
             # Now safely format dates
             try:
-                backtested_transactions_df['Date'] = pd.to_datetime(backtested_transactions_df['Date'], dayfirst=True)
+                # Let pandas infer (ISO-safe) without forcing dayfirst to avoid warnings
+                backtested_transactions_df['Date'] = pd.to_datetime(backtested_transactions_df['Date'], errors='coerce')
                 backtested_transactions_df['Date'] = backtested_transactions_df['Date'].dt.strftime('%d-%m-%Y')
             except Exception as e:
                 print(f"Warning: Date formatting issue: {e}")
@@ -690,10 +716,15 @@ class FilteringAndBacktesting:
         Aggregates global summary from backtested scrips and writes a summary Excel file.
         Uses professional trading terminology and metrics.
         """
-        backtested_scrips_df = backtested_scrips_df.copy() if not backtested_scrips_df.empty else pd.DataFrame()
-        backtested_transactions_df = backtested_transactions_df.copy() if not backtested_transactions_df.empty else pd.DataFrame()
+        import os, shutil
+        import support_files.File_IO as fio
 
-        scrips = backtested_scrips_df['Stock'].unique() if not backtested_scrips_df.empty else []
+        # Normalize inputs
+        backtested_scrips_df = backtested_scrips_df.copy() if isinstance(backtested_scrips_df, pd.DataFrame) and not backtested_scrips_df.empty else pd.DataFrame()
+        backtested_transactions_df = backtested_transactions_df.copy() if isinstance(backtested_transactions_df, pd.DataFrame) and not backtested_transactions_df.empty else pd.DataFrame()
+
+        # Safely compute scrip list if Stock column exists
+        scrips = backtested_scrips_df['Stock'].unique().tolist() if (not backtested_scrips_df.empty and 'Stock' in backtested_scrips_df.columns) else []
         num_positions = len(scrips)
         initial_capital = self.initial_cash
 
@@ -702,31 +733,32 @@ class FilteringAndBacktesting:
         print("="*80)
 
         # Build map of final cash and positions per stock
-        final_cash_map = {}
-        final_position_map = {}
-        for scrip, df_s in scrip_extractor(backtested_scrips_df):
-            if df_s.empty:
-                final_cash_map[scrip] = 0.0
-                final_position_map[scrip] = 0
-                continue
-            try:
-                last_row = df_s.loc[df_s.index.max()]
-            except Exception:
-                last_row = df_s.iloc[-1] if not df_s.empty else None
-            if last_row is None:
-                final_cash_map[scrip] = 0.0
-                final_position_map[scrip] = 0
-            else:
-                if hasattr(last_row, "get"):
-                    final_cash_map[scrip] = float(last_row.get('balance_cash', 0.0) or 0.0)
-                    final_position_map[scrip] = int(last_row.get('Position', 0) or 0)
+        final_cash_map: dict[str, float] = {}
+        final_position_map: dict[str, int] = {}
+        if scrips and 'Stock' in backtested_scrips_df.columns:
+            for scrip, df_s in scrip_extractor(backtested_scrips_df):
+                if df_s.empty:
+                    final_cash_map[scrip] = 0.0
+                    final_position_map[scrip] = 0
+                    continue
+                try:
+                    last_row = df_s.loc[df_s.index.max()]
+                except Exception:
+                    last_row = df_s.iloc[-1] if not df_s.empty else None
+                if last_row is None:
+                    final_cash_map[scrip] = 0.0
+                    final_position_map[scrip] = 0
                 else:
-                    final_cash_map[scrip] = float(last_row['balance_cash']) if 'balance_cash' in last_row.index else 0.0
-                    final_position_map[scrip] = int(last_row['Position']) if 'Position' in last_row.index else 0
+                    if hasattr(last_row, "get"):
+                        final_cash_map[scrip] = float(last_row.get('balance_cash', 0.0) or 0.0)
+                        final_position_map[scrip] = int(last_row.get('Position', 0) or 0)
+                    else:
+                        final_cash_map[scrip] = float(last_row['balance_cash']) if 'balance_cash' in last_row.index else 0.0
+                        final_position_map[scrip] = int(last_row['Position']) if 'Position' in last_row.index else 0
 
         # Get latest market prices
-        current_market_prices = {}
-        if master_df is not None:
+        current_market_prices: dict[str, float] = {}
+        if isinstance(master_df, pd.DataFrame) and not master_df.empty and 'Date' in master_df.columns and 'Stock' in master_df.columns:
             try:
                 latest_data = master_df.sort_values(by=['Stock', 'Date']).groupby('Stock').last()
                 for scrip in scrips:
@@ -744,21 +776,20 @@ class FilteringAndBacktesting:
                     current_market_prices[scrip] = 0.0
 
         # Calculate portfolio components
-        total_cash = sum(final_cash_map.values())
+        total_cash = sum(final_cash_map.values()) if final_cash_map else 0.0
         unrealized_market_value = 0.0
-        
+
         print("CURRENT PORTFOLIO HOLDINGS:")
         print("-" * 80)
         print(f"{'Security':<15} {'Shares':<10} {'Market Price':<12} {'Market Value':<15} {'Cash':<12}")
         print("-" * 80)
-        
+
         for scrip in scrips:
             shares = final_position_map.get(scrip, 0)
             market_price = current_market_prices.get(scrip, 0.0) or 0.0
             market_value = shares * market_price
             cash = final_cash_map.get(scrip, 0.0)
             unrealized_market_value += market_value
-            
             print(f"{scrip:<15} {shares:<10,} ₹{market_price:<11.2f} ₹{market_value:<14,.0f} ₹{cash:<11,.0f}")
 
         print("-" * 80)
@@ -1060,7 +1091,8 @@ class FilteringAndBacktesting:
 
                 # Now safely convert to datetime and format to ISO
                 try:
-                    tx_export['Date'] = pd.to_datetime(tx_export['Date'], errors='coerce')
+                    # Original transaction dates were exported as '%d-%m-%Y'; parse explicitly to avoid warnings
+                    tx_export['Date'] = pd.to_datetime(tx_export['Date'], format='%d-%m-%Y', errors='coerce')
                     tx_export['Date'] = tx_export['Date'].dt.strftime('%Y-%m-%d')
                     print("[DEBUG] Sample export dates (after ISO normalization):")
                     print(tx_export['Date'].head())
@@ -1080,10 +1112,11 @@ class FilteringAndBacktesting:
             backtested_transactions_df.to_excel('detailed_transactions.xlsx', index=False)
             print("✅ Detailed transactions exported to 'detailed_transactions.xlsx'")
 
-        # Also place copies under output_data/dashboard_exports for co-located dashboard assets
+        # Also place copies under dashboard_exports for co-located dashboard assets
         try:
             import shutil, os
-            export_dir = os.path.join('output_data', 'dashboard_exports')
+            # At this point cwd is ../output_data; avoid nesting another 'output_data'
+            export_dir = os.path.join('dashboard_exports')
             os.makedirs(export_dir, exist_ok=True)
             for fname in [
                 'portfolio_performance_report.xlsx',
@@ -1155,13 +1188,14 @@ class FilteringAndBacktesting:
                     strategy_name=strategy_name
                 )
                 # Export JSON for Streamlit dashboard and provide launch instructions
-                export_dir = "output_data/dashboard_exports"
+                # cwd is output_data at runtime; write to a sibling 'dashboard_exports'
+                export_dir = "dashboard_exports"
                 dashboard.export_dashboard_data(export_dir=export_dir)
                 json_path = os.path.join(export_dir, "trading_data.json")
                 print(f"[OK] Dashboard data exported: {json_path}")
-                print("[ROCKET] To launch interactive dashboard, run:")
+                print("🚀 To launch interactive dashboard, run:")
                 print("   streamlit run streamlit_dashboard.py")
-                print("[CHART] Interactive Streamlit dashboard ready!")
+                print("📊 Interactive Streamlit dashboard ready!")
             except Exception as e:
                 print(f"⚠️ Dashboard creation failed: {e}")      
 
@@ -1248,6 +1282,6 @@ if __name__ == '__main__':
     print("📊 Check 'output_data' folder for detailed reports")
     print("📄 Review 'portfolio_trading_log.txt' for complete trading history")
     
-    print("\n[CELEBRATION] PORTFOLIO ANALYSIS COMPLETED SUCCESSFULLY!")
-    print("[CHART] Check 'output_data' folder for detailed reports")
-    print("[DOCUMENT] Review 'portfolio_trading_log.txt' for complete trading history")
+    print("\n🎉 PORTFOLIO ANALYSIS COMPLETED SUCCESSFULLY!")
+    print("📊 Check 'output_data' folder for detailed reports")
+    print("📄 Review 'portfolio_trading_log.txt' for complete trading history")

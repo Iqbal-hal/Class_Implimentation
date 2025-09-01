@@ -50,7 +50,7 @@ FILTER_RECOMMENDATIONS = {
 }
 
 # Active configuration parameters - Updated with enhanced filter
-ACTIVE_FILTER = 'filter_adaptive_rsi'
+ACTIVE_FILTER = 'filter_adx'
 FILTER_ENABLED = True
 LOGGING_ENABLED = True
 ENABLE_DETAILED_LOGGING = True

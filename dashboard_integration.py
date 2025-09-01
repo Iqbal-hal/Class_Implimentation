@@ -24,7 +24,9 @@ def _safe_date_convert(date_val):
     return str(date_val)
 
 def export_dashboard_data(all_stock_data, output_dir="output_data"):
-    """Export stock data into JSON for dashboard with proper Plotly format."""
+    """Export stock data into JSON for dashboard with proper Plotly format.
+    Note: Caller should pass the final folder (e.g., 'dashboard_exports').
+    """
     os.makedirs(output_dir, exist_ok=True)
     export_path = os.path.join(output_dir, "trading_data.json")
 
@@ -67,17 +69,8 @@ def export_dashboard_data(all_stock_data, output_dir="output_data"):
     with open(export_path, "w", encoding="utf-8") as f:
         json.dump(all_charts, f, indent=2)
 
-    # Also drop a copy next to the launched HTML (output_dir/dashboard_exports)
-    export_dir2 = os.path.join(output_dir, "dashboard_exports")
-    try:
-        os.makedirs(export_dir2, exist_ok=True)
-        export_path2 = os.path.join(export_dir2, "trading_data.json")
-        with open(export_path2, "w", encoding="utf-8") as f2:
-            json.dump(all_charts, f2, indent=2)
-        print(f"[OK] Dashboard JSON exported → {export_path} and {export_path2}")
-    except Exception:
-        # If this best-effort copy fails, proceed silently
-        print(f"[OK] Dashboard JSON exported → {export_path}")
+    # Single output only (avoid accidental nested output_data paths)
+    print(f"[OK] Dashboard JSON exported → {export_path}")
 
 def export_dashboard_files(html_content, trading_data):
     """Export dashboard HTML and JSON to dashboard_exports with safe date normalization."""

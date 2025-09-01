@@ -13,8 +13,13 @@ class DualLogger:
         self.log_file = open(logfile_path, "a", encoding="utf-8", errors="replace")
         
     def _console_safe(self, message):
-        """Convert emojis and special characters to console-safe alternatives"""
-        # Quick emoji/symbol replacements for console display
+        """Convert emojis and special characters to console-safe alternatives when needed."""
+        # If console supports UTF, keep emojis as-is
+        enc = getattr(self.terminal, 'encoding', None)
+        if isinstance(enc, str) and enc.lower().startswith('utf'):
+            return message
+
+        # Fallback replacements for non-UTF consoles
         replacements = {
             '📊': '[CHART]', '💰': '[MONEY]', '📈': '[UP]', '📉': '[DOWN]',
             '🎯': '[TARGET]', '🚀': '[ROCKET]', '💎': '[DIAMOND]', '✅': '[OK]',
@@ -23,14 +28,12 @@ class DualLogger:
             '₹': 'Rs.', '€': 'EUR', '$': 'USD', '£': 'GBP',
             '→': '->', '←': '<-', '↑': 'UP', '↓': 'DOWN',
             '•': '*', '◦': 'o', '■': '[BLOCK]', '□': '[BOX]',
-            '"': '"', '"': '"', ''': "'", ''': "'", '…': '...',
-            '–': '-', '—': '--', '≥': '>=', '≤': '<=', '±': '+/-'
+            '…': '...', '–': '-', '—': '--', '≥': '>=', '≤': '<=', '±': '+/-'
         }
-        
+
         safe_message = message
         for emoji, replacement in replacements.items():
             safe_message = safe_message.replace(emoji, replacement)
-        
         return safe_message
 
     def write(self, message):
