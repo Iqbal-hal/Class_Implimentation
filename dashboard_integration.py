@@ -821,63 +821,38 @@ class TradingDashboard:
 
     def export_dashboard_data(self, export_dir='output_data/dashboard_exports'):
         """
-        Export dashboard HTML and JSON to a directory, injecting data into the template
-        and ensuring all dates are ISO formatted.
+        Export ONLY JSON for Streamlit dashboard consumption. Ensures ISO dates.
         """
         try:
-            # Work from the module directory
-            try:
-                pkg_dir = Path(__file__).resolve().parent
-                os.chdir(pkg_dir)
-            except Exception:
-                pass
-
+            # Ensure output directory exists
             os.makedirs(export_dir, exist_ok=True)
-            export_path_html = os.path.join(export_dir, 'trading_dashboard.html')
             export_path_json = os.path.join(export_dir, 'trading_data.json')
 
-            # Normalize all dates → ISO
+            # Normalize all dates → ISO string
             def iso_date(val):
                 try:
-                    return pd.to_datetime(val, errors='coerce').strftime('%Y-%m-%d')
+                    ts = pd.to_datetime(val, errors='coerce')
+                    return ts.strftime('%Y-%m-%d') if pd.notna(ts) else ''
                 except Exception:
                     return str(val)
 
             export_data = {
                 stock: [
                     {**row, 'Date': iso_date(row.get('Date', ''))}
-                    for row in data
+                    for row in (data or []) if isinstance(row, dict)
                 ]
-                for stock, data in self.stock_data.items()
+                for stock, data in (self.stock_data or {}).items()
             }
 
-            # Write JSON (for debugging/external use)
+            # Write JSON only
             with open(export_path_json, 'w', encoding='utf-8') as f:
-                json.dump(export_data, f, indent=2)
+                json.dump(export_data, f, indent=2, ensure_ascii=False)
 
-            # Inject JSON into HTML template
-            with open('trading_dashboard.html', 'r', encoding='utf-8') as f:
-                html_template = f.read()
-
-            html_content = html_template.replace(
-                'STOCK_DATA_PLACEHOLDER', json.dumps(export_data)
-            ).replace(
-                'TRANSACTION_DATA_PLACEHOLDER', json.dumps(self.transactions_data)
-            )
-
-            with open(export_path_html, 'w', encoding='utf-8') as f:
-                f.write(html_content)
-
-            print(f"[OK] Dashboard exported: {export_path_html}")
-            print(f"[OK] JSON exported: {export_path_json}")
-
-            if 'STOCK_DATA_PLACEHOLDER' in html_content:
-                print('[WARNING] JSON injection failed — placeholder still present!')
-
+            print(f"[OK] Dashboard data exported: {export_path_json}")
             return export_dir
 
         except Exception as e:
-            print(f"❌ Error exporting dashboard: {e}")
+            print(f"❌ Error exporting dashboard data: {e}")
             return None
 
 

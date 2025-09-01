@@ -622,6 +622,17 @@ class FilteringAndBacktesting:
         print("PORTFOLIO BACKTESTING STARTED".center(80))
         print("="*80)
 
+        # Ensure Stock column is preserved
+        if 'Stock' not in filtered_scrips_df.columns:
+            print("⚠️ WARNING: 'Stock' column missing in filtered_scrips_df. Attempting to restore...")
+            try:
+                if getattr(filtered_scrips_df.index, 'name', None) == 'Stock':
+                    filtered_scrips_df = filtered_scrips_df.reset_index()
+                else:
+                    raise KeyError("'Stock' column not found in filtered_scrips_df")
+            except Exception as _e:
+                raise
+
         for scrip, filtered_scrip_df in scrip_extractor(filtered_scrips_df):
             buy_signal = filtered_scrip_df['Buy']
             sell_signal = filtered_scrip_df['Sell']
@@ -1064,28 +1075,31 @@ class FilteringAndBacktesting:
             global_summary_df.to_excel(writer, sheet_name="Quick_Summary", index=False)
 
         print("✅ Portfolio Performance Report exported to 'portfolio_performance_report.xlsx'")
-        
+
         if not backtested_transactions_df.empty:
             backtested_transactions_df.to_excel('detailed_transactions.xlsx', index=False)
             print("✅ Detailed transactions exported to 'detailed_transactions.xlsx'")
 
-        print(f"\n" + "="*80)
-        print("FINAL PORTFOLIO RESULTS".center(80))
-        print("="*80)
-        print(f"🎯 Strategy: {config.ACTIVE_FILTER}")
-        print(f"💰 Initial Investment: ₹{initial_capital:,.2f}")
-        print(f"💎 Current Portfolio Value: ₹{total_portfolio_value:,.2f}")
-        print(f"📈 Total Return: ₹{total_return_amount:+,.2f} ({total_return_pct:+.2f}%)")
-        print(f"💵 Realized Gains: ₹{realized_pnl:,.2f}")
-        print(f"💹 Unrealized Gains: ₹{unrealized_pnl:,.2f}")
-        if cagr is not None:
-            print(f"📊 CAGR: {cagr*100:.2f}%")
-        print(f"🏢 Active Positions: {sum(1 for pos in final_position_map.values() if pos > 0)}/{num_positions}")
-        print(f"💸 Total Brokerage: ₹{total_brokerage:,.2f}")
-        print("="*80)
+        # Also place copies under output_data/dashboard_exports for co-located dashboard assets
+        try:
+            import shutil, os
+            export_dir = os.path.join('output_data', 'dashboard_exports')
+            os.makedirs(export_dir, exist_ok=True)
+            for fname in [
+                'portfolio_performance_report.xlsx',
+                'detailed_transactions.xlsx',
+                'backtested_scrips.xlsx',
+                'backtested_transactions.xlsx',
+            ]:
+                if os.path.exists(fname):
+                    shutil.copy2(fname, os.path.join(export_dir, fname))
+            print(f"[OK] Reports copied to: {export_dir}")
+        except Exception as _copy_err:
+            print(f"[WARNING] Could not copy reports to dashboard_exports: {_copy_err}")
 
-        fio.get_cwd()
-        return backtested_transactions_df, global_summary_df
+    print(f"\n" + "="*80)
+    print("FINAL PORTFOLIO RESULTS".center(80))
+    print("="*80)
 
     # --------------------- RUN METHOD ---------------------
     def run(self, master_df,create_dashboard=True):
@@ -1171,8 +1185,46 @@ if __name__ == '__main__':
     except Exception:
         pass
 
-    # Load market data (from input_data)
-    master_df = fio.read_csv_to_df('Nif50_5y_1w.csv', 'A', 'input_data')
+    # Load market data (from input_data); allow override from env BACKTEST_INPUT_CSV
+    _csv_override = os.environ.get('BACKTEST_INPUT_CSV')
+    if _csv_override and os.path.exists(_csv_override):
+        csv_name = os.path.basename(_csv_override)
+        csv_folder = os.path.dirname(_csv_override) or 'input_data'
+        master_df = fio.read_csv_to_df(csv_name, 'A', csv_folder, dayfirst=True)
+        print(f"[INFO] Using input CSV from override: {_csv_override}")
+    else:
+        master_df = fio.read_csv_to_df('Nif50_5y_1w.csv', 'A', 'input_data', dayfirst=True)
+
+    # Validate required columns before continuing
+    required_cols = {"Open", "High", "Low", "Close", "Volume", "Stock"}
+    available_cols = set(master_df.columns)
+
+    # Ensure 'Date' exists either as a column or index named 'Date'
+    try:
+        has_date_col = "Date" in master_df.columns
+        has_date_index = getattr(master_df.index, 'name', None) == "Date"
+    except Exception:
+        has_date_col = "Date" in master_df.columns
+        has_date_index = False
+    if not (has_date_col or has_date_index):
+        print("❌ ERROR: Input data is missing 'Date' column or index.")
+        try:
+            print(f"   Available columns: {master_df.columns.tolist()}")
+            print(f"   Index name: {master_df.index.name}")
+        except Exception:
+            pass
+        sys.exit(1)
+
+    # Handle missing OHLCV/Stock columns
+    if not required_cols.issubset(available_cols):
+        missing_cols = sorted(list(required_cols - available_cols))
+        print("❌ ERROR: Input data is missing required columns for backtest.")
+        try:
+            print(f"   Missing columns: {missing_cols}")
+            print(f"   Available columns: {master_df.columns.tolist()}")
+        except Exception:
+            pass
+        sys.exit(1)
     
     # Initialize portfolio management system
     portfolio_manager = FilteringAndBacktesting(initial_cash=100000.0)

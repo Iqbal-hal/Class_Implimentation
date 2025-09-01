@@ -77,7 +77,7 @@ def save_df_to_pkl(_df, filename, _order):
         print(f"An error occurred: {e}")
 
 
-def read_csv_to_df(filename, _order,source_dir):
+def read_csv_to_df(filename, _order,source_dir,dayfirst=True):
     # make 'files' as the current working directory
     # read  *.csv/sub_dir
     cd = os.getcwd()
@@ -97,15 +97,29 @@ def read_csv_to_df(filename, _order,source_dir):
         _df.columns = [_clean_col(c) for c in _df.columns]
     except Exception:
         pass
-    # Normalize Date to datetime; if absent but index looks like date, keep it
+    # Normalize Date to datetime (day-first by default) and ensure it's a column, not index
     if 'Date' in _df.columns:
-        _df['Date'] = pd.to_datetime(_df['Date'])
-        _df.set_index('Date', inplace=True)  # set Date column as index
-    # index-based sorting compulsory for slicing
-    _df.sort_index(axis=0, inplace=True)
-    # Then stable sort by Stock without referencing a non-existent Date column
-    if 'Stock' in _df.columns:
-        _df = _df.sort_values(by=['Stock'], kind='mergesort')
+        _df['Date'] = pd.to_datetime(_df['Date'], dayfirst=dayfirst, errors='coerce')
+
+    # If Date somehow got set as index upstream, reset it back to a normal column
+    try:
+        if _df.index.name == 'Date':
+            _df.reset_index(inplace=True)
+    except Exception:
+        pass
+
+    # Final guarantee: if Date exists, ensure dtype is datetime
+    if 'Date' in _df.columns:
+        _df['Date'] = pd.to_datetime(_df['Date'], errors='coerce')
+
+    # Stable sort: preserve natural row order; sort by Stock if present
+    try:
+        if 'Stock' in _df.columns and 'Date' in _df.columns:
+            _df = _df.sort_values(by=['Stock', 'Date'], ascending=[True, order], kind='mergesort')
+        elif 'Stock' in _df.columns:
+            _df = _df.sort_values(by=['Stock'], kind='mergesort')
+    except Exception:
+        pass
 
     os.chdir(cd)
 

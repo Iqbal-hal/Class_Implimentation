@@ -18,16 +18,76 @@ except Exception as _err:
         print(f"  {i}: {p}")
 
 import streamlit as st
+import subprocess
+import pathlib
+import glob
 import json
 import pandas as pd
 import plotly.express as px
 import importlib
 import re
-import support_files.updated_config as config_module
-import support_files.File_IO as fio
 
 # CONFIG_PATH is used to locate the config file
 CONFIG_PATH = Path(__file__).parent / 'support_files' / 'updated_config.py'
+
+def execute_backtest(csv_path: str | None = None):
+    """Run Enhanced_stock_trading_V8.py using the venv Python if present; capture UTF-8 logs."""
+    try:
+        venv_python = pathlib.Path('.venv/Scripts/python.exe')  # Correct Windows venv path
+        if not venv_python.exists():
+            venv_python = pathlib.Path(sys.executable)
+
+        env = os.environ.copy()
+        if csv_path:
+            env['BACKTEST_INPUT_CSV'] = csv_path
+
+        result = subprocess.run(
+            [str(venv_python), 'Enhanced_stock_trading_V8.py'],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            encoding='utf-8',
+            errors='replace',
+            env=env
+        )
+
+        if result.returncode != 0:
+            st.error('❌ Backtest failed. Check logs below.')
+            with st.expander('Show backtest error logs'):
+                st.code(result.stderr or 'No stderr captured', language='bash')
+            return False
+        else:
+            st.success('✅ Backtest completed successfully.')
+            with st.expander('Show backtest logs'):
+                st.code(result.stdout or 'No stdout captured', language='bash')
+            return True
+    except Exception as e:
+        st.error(f"⚠️ Failed to run backtest: {e}")
+        return False
+
+def run_backtest_command(selected_csv: str):
+    """Persist last CSV selection and run the backtest using robust runner."""
+    global cfg
+    # Try to persist last selection in memory (and config if possible)
+    try:
+        if isinstance(cfg, dict):
+            cfg["last_csv"] = selected_csv
+        else:
+            setattr(cfg, "last_csv", selected_csv)
+    except Exception:
+        pass
+
+    ok = execute_backtest(selected_csv)
+    if ok:
+        st.success("✅ Backtest completed successfully!")
+    else:
+        st.error("❌ Backtest failed. See logs above.")
+
+# Centralized export directory for all dashboard artifacts
+EXPORT_DIR = os.path.join("output_data", "dashboard_exports")
+scrips_file = os.path.join(EXPORT_DIR, "backtested_scrips.xlsx")
+transactions_file = os.path.join(EXPORT_DIR, "backtested_transactions.xlsx")
+json_file = os.path.join(EXPORT_DIR, "trading_data.json")
 
 def read_config_lines():
     return CONFIG_PATH.read_text(encoding='utf-8').splitlines()
@@ -63,6 +123,76 @@ def update_config_values(lines, updates):
             out.append(line)
     return out
 
+def save_configuration():
+    """Persist current sidebar settings to support_files/updated_config.py."""
+    global cfg
+    # Determine active filter based on selection/market condition
+    if selected_filter != "<use market condition>":
+        active = selected_filter
+    else:
+        rf = getattr(cfg, 'get_recommended_filters', None)
+        try:
+            if callable(rf) and market_condition != "none":
+                recs = rf(market_condition) or []
+            else:
+                recs = []
+        except Exception:
+            recs = []
+        active = recs[0] if recs else getattr(cfg, 'ACTIVE_FILTER', 'filter_ensemble_weighted')
+
+    updates = {
+        'ACTIVE_FILTER': active,
+        'MIN_HOLDING_PERIOD': int(min_holding),
+        'MIN_PROFIT_PERCENTAGE': float(min_profit),
+        'MIN_FILTER_SELL_PROFIT': float(min_filter_sell),
+        'TRAILING_STOP_PERCENT': float(trailing_stop),
+        'SUPPORT_TYPE': support_type,
+        'SR_LOOKBACK': int(sr_lookback),
+        'SR_TOLERANCE': float(sr_tolerance),
+        'ENABLE_DETAILED_LOGGING': bool(enable_detailed),
+        'POSITION_SIZING_ENABLED': bool(position_sizing),
+        'PORTFOLIO_STRATEGY': portfolio_strategy
+    }
+    lines = read_config_lines()
+    new_lines = update_config_values(lines, updates)
+    write_config_lines(new_lines)
+    # refresh cfg for display
+    cfg = reload_config()
+    st.success("Configuration saved to support_files/updated_config.py")
+
+def reload_latest_results():
+    """Load latest Excel outputs from output_data/dashboard_exports and preview."""
+    results_path = "output_data/dashboard_exports"
+    scrips_file = f"{results_path}/backtested_scrips.xlsx"
+    txns_file   = f"{results_path}/backtested_transactions.xlsx"
+    perf_file   = f"{results_path}/portfolio_performance_report.xlsx"
+
+    try:
+        scrips_df = pd.read_excel(scrips_file)
+        txns_df   = pd.read_excel(txns_file)
+        perf_df   = pd.read_excel(perf_file)
+        st.success("✅ Latest backtest results loaded successfully!")
+        st.dataframe(scrips_df.head())
+        st.dataframe(txns_df.head())
+        st.dataframe(perf_df.head())
+    except FileNotFoundError:
+        st.warning("⚠️ Backtest files not found. Running backtest automatically...")
+        if execute_backtest():
+            st.info("Reloading results after backtest...")
+            try:
+                scrips_df = pd.read_excel(scrips_file)
+                txns_df   = pd.read_excel(txns_file)
+                perf_df   = pd.read_excel(perf_file)
+                st.success("✅ Latest backtest results loaded successfully!")
+                st.dataframe(scrips_df.head())
+                st.dataframe(txns_df.head())
+                st.dataframe(perf_df.head())
+            except Exception as e:
+                st.error(f"Failed to load results after backtest: {e}")
+        else:
+            st.error("Backtest did not complete; cannot load results.")
+    except Exception as e:
+        st.error(f"Failed to load results: {e}")
 def reload_config():
     """
     Load CONFIG_PATH robustly:
@@ -111,6 +241,13 @@ def reload_config():
     except Exception as e:
         raise RuntimeError(f"Unable to load config (tried JSON/module/line-parse): {e}")
 
+def reload_config_ui(with_message: bool = True):
+    """UI wrapper: refresh global cfg from disk and optionally inform the user."""
+    global cfg
+    cfg = reload_config()
+    if with_message:
+        st.info("♻️ Config reloaded from file (unsaved changes discarded).")
+
 try:
     # preferred arg name for modern Streamlit
     st.set_page_config(page_title="Portfolio Dashboard", layout="wide")
@@ -123,6 +260,18 @@ st.write("Use this UI to choose filters, market condition and risk/exit paramete
 
 # Load latest config values
 cfg = reload_config()
+
+    # Try loading recently exported Excel artifacts (if present)
+try:
+    if os.path.exists(scrips_file) and os.path.exists(transactions_file):
+        _scrips_df = pd.read_excel(scrips_file)
+        _tx_df = pd.read_excel(transactions_file)
+        st.sidebar.success(f"Data loaded from {EXPORT_DIR}")
+        # Optionally preview small shapes in the sidebar
+        st.sidebar.caption(f"Scrips: {_scrips_df.shape}; Tx: {_tx_df.shape}")
+except Exception:
+    # Silent best-effort; JSON viewer below is the primary path
+    pass
 
 with st.sidebar:
     st.header("Mode")
@@ -254,6 +403,7 @@ if st.button("Run Backtest Now") or (mode=="Edit, Save & Run Backtest" and run_b
     try:
         # minimal integration: import the class and run
         from Enhanced_stock_trading_V8 import FilteringAndBacktesting
+        import support_files.File_IO as fio
         # read inputs from input_data inside this package directory (do not hardcode repo root)
         repo_dir = Path(__file__).resolve().parent
         # ensure subsequent relative calls that expect 'input_data' refer to this folder
@@ -277,6 +427,48 @@ if st.button("Run Backtest Now") or (mode=="Edit, Save & Run Backtest" and run_b
 
 st.markdown("---")
 st.caption("This dashboard writes minimal changes to support_files/updated_config.py and does not alter core backtest logic. If you prefer not to run long backtests from the UI, uncheck the run option.")
+
+# =============================
+# Choose Input CSV & Run Backtest
+# =============================
+def list_csv_files(input_dir="input_data"):
+    """Return list of available CSV files in input_data folder."""
+    return [os.path.basename(f) for f in glob.glob(os.path.join(input_dir, "*.csv"))]
+
+st.header("\U0001F5C3 Choose Input CSV")
+csv_files = list_csv_files()
+if not csv_files:
+    st.error("⚠️ No CSV files found in input_data/ folder")
+else:
+    if "last_csv" not in st.session_state:
+        st.session_state.last_csv = csv_files[0]
+    selected_csv = st.selectbox(
+        "Choose Input CSV File",
+        csv_files,
+        index=csv_files.index(st.session_state.last_csv) if st.session_state.last_csv in csv_files else 0
+    )
+    st.session_state.last_csv = selected_csv
+    # Button to trigger backtest safely (avoid shadowing function name)
+    clicked = st.button("⚡ Run Backtest for Selected CSV")
+    if clicked:
+        csv_path = os.path.join("input_data", selected_csv)
+        st.info(f"🔄 Running backtest for: {selected_csv}")
+        try:
+            run_backtest_command(csv_path)
+        except Exception as e:
+            st.error(f"❌ Backtest failed: {e}")
+
+# =============================
+# Reload Latest Results (Excel)
+# =============================
+st.header("\U0001F504 Reload Latest Results")
+st.write("Reload the most recent backtest outputs from output_data/dashboard_exports.")
+reload_btn = st.button("Reload Latest Results")
+if reload_btn:
+    try:
+        reload_latest_results()
+    except Exception as e:
+        st.error(f"❌ Reload failed: {e}")
 
 # ==========================
 # Trading Data Viewer (JSON)
@@ -343,7 +535,7 @@ def _to_df_from_plotly(obj: dict) -> pd.DataFrame:
         return pd.DataFrame()
     return pd.concat(frames, ignore_index=True)
 
-json_path = os.path.join('output_data', 'dashboard_exports', 'trading_data.json')
+json_path = json_file
 if not os.path.exists(json_path):
     st.info("No trading_data.json found yet. Run the backtest to export it (see console instructions).")
 else:
@@ -373,6 +565,17 @@ else:
                     sub = sub.sort_values('Date')
                     fig = px.line(sub, x='Date', y='Close', title=f"{sel} - Close Price")
                     st.plotly_chart(fig, use_container_width=True)
+
+                # Optional indicators view if present
+                indicator_cols = [c for c in ['RSI', 'MACD', 'Signal'] if c in sub.columns]
+                if indicator_cols:
+                    st.subheader(f"Indicators - {sel}")
+                    try:
+                        fig2 = px.line(sub, x='Date', y=indicator_cols, title=f"{sel} - Indicators ({', '.join(indicator_cols)})")
+                        st.plotly_chart(fig2, use_container_width=True)
+                    except Exception:
+                        # Fallback to simple line charts
+                        st.line_chart(sub.set_index('Date')[indicator_cols])
 
             with st.expander("Preview Data", expanded=False):
                 st.dataframe(data_df.head(200), use_container_width=True)
