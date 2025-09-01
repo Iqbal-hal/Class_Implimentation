@@ -145,8 +145,7 @@ class FilteringAndBacktesting:
             fdf = filtered_ta_df.copy()
             fdf.columns = [str(c).strip() for c in fdf.columns]
 
-            # Debug print to confirm columns
-            print(f"DEBUG Columns after normalization: {list(fdf.columns)}")
+            # Debug print removed for cleaner logs
             # Normalize date/ticker column names to avoid KeyError when sources differ
             date_candidates = [
                 "Date", "date", "DATE", "Datetime", "datetime", "Timestamp", "timestamp"
@@ -612,8 +611,6 @@ class FilteringAndBacktesting:
                 transactions_df['Date'] = pd.to_datetime(transactions_df['Date'], errors='coerce')
                 # Always export in ISO format for consistency
                 transactions_df['Date'] = transactions_df['Date'].dt.strftime('%Y-%m-%d')
-                print("[DEBUG] Sample transaction dates (after ISO normalization):")
-                print(transactions_df['Date'].head())
             except Exception as e:
                 print(f"[WARNING] Could not normalize transaction dates: {e}")
 
@@ -1094,8 +1091,6 @@ class FilteringAndBacktesting:
                     # Original transaction dates were exported as '%d-%m-%Y'; parse explicitly to avoid warnings
                     tx_export['Date'] = pd.to_datetime(tx_export['Date'], format='%d-%m-%Y', errors='coerce')
                     tx_export['Date'] = tx_export['Date'].dt.strftime('%Y-%m-%d')
-                    print("[DEBUG] Sample export dates (after ISO normalization):")
-                    print(tx_export['Date'].head())
                 except Exception as e:
                     print(f"Warning: Date formatting error in transactions export: {e}")
                     # Fallback: keep original date format

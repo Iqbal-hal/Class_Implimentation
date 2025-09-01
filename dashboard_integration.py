@@ -148,9 +148,7 @@ class TradingDashboard:
                 # Ensure sorted by Date
                 stock_df = stock_df.sort_values(by='Date').reset_index(drop=True)
 
-                # Debug: show sample dates to confirm parsing worked
-                print('[DEBUG] Parsed dashboard dates (first 5):')
-                print(stock_df['Date'].head())
+                # Debug prints removed for cleaner logs
 
                 # Ensure Date column is fully cleaned and ISO formatted
                 stock_df['Date'] = pd.to_datetime(stock_df['Date'], errors='coerce')
@@ -162,9 +160,7 @@ class TradingDashboard:
                 # Force conversion to string type to avoid JS parse issues
                 stock_df['Date'] = stock_df['Date'].astype(str)
 
-                # Debug check for JSON export
-                print('[DEBUG] Sample JSON export dates (after ISO conversion):')
-                print(stock_df['Date'].head())
+                # Debug prints removed for cleaner logs
             else:
                 # Use index as date if Date column is not available
                 stock_df = stock_df.sort_index()

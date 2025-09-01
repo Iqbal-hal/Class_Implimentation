@@ -11,11 +11,9 @@ if str(repo_root) not in sys.path:
 try:
     import importlib
     importlib.import_module('Class_Implimentation.support_files')
-except Exception as _err:
-    print("DEBUG: failed to import 'Class_Implimentation.support_files':", _err)
-    print("DEBUG: sys.path (first 6 entries):")
-    for i, p in enumerate(sys.path[:6]):
-        print(f"  {i}: {p}")
+except Exception:
+    # Silenced non-critical import diagnostics
+    pass
 
 import streamlit as st
 import subprocess
