@@ -3,6 +3,11 @@ from datetime import datetime
 import os
 from pathlib import Path
 
+# (No functional changes expected here)
+# Only update comments or any hard-coded references for clarity
+# e.g., base project path comments
+# BASE_DIR = r"E:\Sync To GD\GIT\TradingWorkbench"
+
 current_dir = os.getcwd()
 current_datetime = datetime.now()
 time_now = current_datetime.strftime('%d%m%Y%H%M%S')
