@@ -401,7 +401,13 @@ if st.button("Run Backtest Now") or (mode=="Edit, Save & Run Backtest" and run_b
     try:
         # minimal integration: import the class and run
         from Enhanced_stock_trading_V8 import FilteringAndBacktesting
-        import support_files.File_IO as fio
+        try:
+            from TradingWorkbench.support_files import File_IO as fio
+        except ModuleNotFoundError:
+            ROOT = pathlib.Path(__file__).resolve().parent
+            sys.path.append(str(ROOT))
+            sys.path.append(str(ROOT / "support_files"))
+            from TradingWorkbench.support_files import File_IO as fio
         # read inputs from input_data inside this package directory (do not hardcode repo root)
         repo_dir = Path(__file__).resolve().parent
         # ensure subsequent relative calls that expect 'input_data' refer to this folder
