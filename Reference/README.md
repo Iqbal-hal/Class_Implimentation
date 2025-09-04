@@ -1,5 +1,5 @@
-# Class_Implimentation
-Class_Implimentation is the project folder for 'FilteringBacktesting.py','Enhanced_stock_trading.py' .It contains extracting individual scrip from master_df,calculating various technical indicators,apply filters already defined.
+# TradingWorkbench
+TradingWorkbench is the project folder for 'FilteringBacktesting.py','Enhanced_stock_trading.py' .It contains extracting individual scrip from master_df,calculating various technical indicators,apply filters already defined.
 I'll modify your code to implement an intelligent portfolio allocation system that distributes ₹100,000 across stocks based on their potential profitability. Here's the enhanced version:## Key Enhancements Made:
 
 ### 1. **Intelligent Portfolio Allocation System**

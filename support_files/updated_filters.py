@@ -365,7 +365,7 @@ def filter_vwap(scrip_df, return_signals=False):
 import pandas as pd
 
 # If some enhanced filters are not yet implemented, create safe fallback stubs
-# so imports like `from Class_Implimentation.support_files.updated_filters import filter_divergence`
+# so imports like `from TradingWorkbench.support_files.updated_filters import filter_divergence`
 # succeed and Streamlit won't fall back repeatedly.
 _expected_filters = [
     "filter_divergence",

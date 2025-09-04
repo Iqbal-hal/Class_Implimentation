@@ -2,7 +2,7 @@
 import os
 from pathlib import Path
 
-# ensure project root is on sys.path (DO NOT add the Class_Implimentation folder itself)
+# ensure project root is on sys.path (DO NOT add the TradingWorkbench folder itself)
 repo_root = Path(__file__).resolve().parent.parent
 if str(repo_root) not in sys.path:
     sys.path.insert(0, str(repo_root))
@@ -10,7 +10,7 @@ if str(repo_root) not in sys.path:
 # quick import check & diagnostic (safe to keep)
 try:
     import importlib
-    importlib.import_module('Class_Implimentation.support_files')
+    importlib.import_module('TradingWorkbench.support_files')
 except Exception:
     # Silenced non-critical import diagnostics
     pass
