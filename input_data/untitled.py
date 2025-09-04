@@ -9,7 +9,7 @@ import matplotlib.dates as mdates
 import matplotlib.gridspec as gridspec
 from matplotlib.backends.backend_tkagg import NavigationToolbar2Tk, FigureCanvasTkAgg
 from matplotlib.figure import Figure
-import talib
+from support_files.ta_adapter import EMA, RSI, MACD, BBANDS, ATR
 
 # ======================
 # Global toggles
@@ -460,19 +460,19 @@ def iterate_list(filtered_ohlc_gain_df):
         df_scrip_ohlc = filtered_ohlc_df[filtered_ohlc_df['Stock'] == current_stock].copy()
         df_scrip_gain = filtered_gain_df.loc[current_stock, :]
         df = df_scrip_ohlc.copy()
-        df['ema_200'] = talib.EMA(df['Close'], timeperiod=200)
-        df['ema_100'] = talib.EMA(df['Close'], timeperiod=100)
-        df['ema_50']  = talib.EMA(df['Close'], timeperiod=50)
-        df['ema_30']  = talib.EMA(df['Close'], timeperiod=30)
-        df['ema_20']  = talib.EMA(df['Close'], timeperiod=20)
-        df['ema_9']   = talib.EMA(df['Close'], timeperiod=9)
-        df['volume_ema_20'] = talib.EMA(df['Volume'], timeperiod=20)
-        df['RSI'] = talib.RSI(df['Close'], timeperiod=14).round(2)
-        df['MACD'], df['Signal'], df['Hist'] = talib.MACD(df['Close'], fastperiod=12, slowperiod=26, signalperiod=9)
-        df['ATR'] = talib.ATR(df['High'], df['Low'], df['Close'], timeperiod=14)
+    df['ema_200'] = EMA(df['Close'], timeperiod=200)
+    df['ema_100'] = EMA(df['Close'], timeperiod=100)
+    df['ema_50']  = EMA(df['Close'], timeperiod=50)
+    df['ema_30']  = EMA(df['Close'], timeperiod=30)
+    df['ema_20']  = EMA(df['Close'], timeperiod=20)
+    df['ema_9']   = EMA(df['Close'], timeperiod=9)
+    df['volume_ema_20'] = EMA(df['Volume'], timeperiod=20)
+    df['RSI'] = RSI(df['Close'], timeperiod=14).round(2)
+    df['MACD'], df['Signal'], df['Hist'] = MACD(df['Close'], fastperiod=12, slowperiod=26, signalperiod=9)
+    df['ATR'] = ATR(df['High'], df['Low'], df['Close'], timeperiod=14)
         n = 20
         std_dev = 2
-        df['Bollinger_Upper'], df['Bollinger_Middle'], df['Bollinger_Lower'] = talib.BBANDS(
+        df['Bollinger_Upper'], df['Bollinger_Middle'], df['Bollinger_Lower'] = BBANDS(
             df['Close'], timeperiod=n, nbdevup=std_dev, nbdevdn=std_dev, matype=0
         )
     
