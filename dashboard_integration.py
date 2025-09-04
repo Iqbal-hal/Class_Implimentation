@@ -7,7 +7,30 @@ import webbrowser
 import tempfile
 from pathlib import Path
 
+import importlib
+import pathlib
 import support_files.updated_config as config
+
+# Robust File_IO import: prefer package-style import (TradingWorkbench.support_files.File_IO),
+# then top-level support_files, then load File_IO.py directly from support_files folder.
+try:
+    try:
+        fio = importlib.import_module('TradingWorkbench.support_files.File_IO')
+    except Exception:
+        fio = importlib.import_module('support_files.File_IO')
+except Exception:
+    # Final fallback: load module directly from support_files/File_IO.py using importlib
+    ROOT = pathlib.Path(__file__).resolve().parent
+    import sys
+    sys.path.insert(0, str(ROOT))
+    sys.path.insert(0, str(ROOT / "support_files"))
+    file_io_path = ROOT / "support_files" / "File_IO.py"
+    if file_io_path.exists():
+        spec = importlib.util.spec_from_file_location("support_files.File_IO", str(file_io_path))
+        fio = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(fio)
+    else:
+        raise ModuleNotFoundError(f"Unable to locate File_IO.py at {file_io_path}")
 
 # Utility: Safe date conversion and dashboard file export
 def _safe_date_convert(date_val):
