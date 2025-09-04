@@ -14,11 +14,21 @@ os.environ.setdefault('PYTHONUTF8', '1')
 
 import os
 from pathlib import Path
-import support_files.updated_config as config
 import pandas as pd
 import numpy as np
-from support_files.scrip_extractor import scrip_extractor
-import support_files.compute_indicators_helper as cmp  # For computing technical indicators
+
+# Prefer imports from the installed package name 'TradingWorkbench' when available.
+# Fall back to the local `support_files` package for development copies.
+try:
+    from TradingWorkbench.support_files import updated_config as config
+    from TradingWorkbench.support_files.scrip_extractor import scrip_extractor
+    import TradingWorkbench.support_files.compute_indicators_helper as cmp
+except ModuleNotFoundError:
+    # Local development layout (relative imports)
+    import support_files.updated_config as config
+    from support_files.scrip_extractor import scrip_extractor
+    import support_files.compute_indicators_helper as cmp  # For computing technical indicators
+
 from dashboard_integration import TradingDashboard
 from portfolio_optimiser import optimize_portfolio
 
