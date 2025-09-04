@@ -1,0 +1,33 @@
+digraph G {
+  graph [
+    label="Legend - Details for Blocks 9-10 and Notes (v2)",
+    labelloc="t",
+    fontsize=18,
+    fontname="Helvetica",
+    bgcolor="white",
+    rankdir=TB,
+    size="8.27,11.69!",
+    ratio=compress,
+    margin=0.40,
+    nodesep="0.20",
+    ranksep="0.35"
+  ];
+
+  node [
+    shape=box,
+    style="rounded,filled",
+    fontname="Helvetica",
+    fontsize=12,
+    color="#1f2937",
+    fillcolor="white",
+    penwidth=1.1
+  ];
+
+  L9  [label="9  Dashboard\n\nFiles: streamlit_dashboard.py, dashboard_integration.py\nRole: Streamlit UI, Plotly candlesticks with Buy and Sell markers,\n      controls for config and filters, export options.", fillcolor="#e2e8f0"];
+
+  L10 [label="10 Reports\n\nFile: Enhanced_stock_trading_V8.py\nRole: Excel and HTML export of performance summary, holdings analysis, transaction history.", fillcolor="#e2e8f0"];
+
+  N   [label="Notes\n\n1) Input schema: Date, Stock, Open, High, Low, Close, Volume.\n2) Indicators are computed per scrip before filtering.\n3) Allocation is tuned by config (caps and decay factor).\n4) Backtest constraints: min holding days and min profit percent.\n5) Brokerage accounted per trade in ledger.\n6) Future: trailing stops, sector caps, portfolio equity curve.", fillcolor="#f8fafc"];
+
+  L9 -> L10 -> N [style=invis];
+}

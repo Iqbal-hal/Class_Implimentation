@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Trading System Block Diagram</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            margin: 0;
+            padding: 20px;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+        }
+
+        .title {
+            text-align: center;
+            font-size: 2.5em;
+            font-weight: bold;
+            color: #2c3e50;
+            margin-bottom: 40px;
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .diagram {
+            display: flex;
+            flex-direction: column;
+            gap: 30px;
+            align-items: center;
+        }
+
+        .stage {
+            width: 100%;
+            max-width: 900px;
+            border-radius: 15px;
+            padding: 25px;
+            box-shadow: 0 8px 16px rgba(0, 0, 0, 0.1);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+            position: relative;
+        }
+
+        .stage:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 12px 24px rgba(0, 0, 0, 0.15);
+        }
+
+        .ingestion {
+            background: linear-gradient(135deg, #ff9a9e 0%, #fecfef 100%);
+        }
+
+        .indicators {
+            background: linear-gradient(135deg, #a8edea 0%, #fed6e3 100%);
+        }
+
+        .screening {
+            background: linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%);
+        }
+
+        .allocation {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .backtest {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            color: white;
+        }
+
+        .outputs {
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+        }
+
+        .stage-title {
+            font-size: 1.8em;
+            font-weight: bold;
+            margin-bottom: 20px;
+            text-align: center;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+
+        .blocks {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+        }
+
+        .block {
+            background: rgba(255, 255, 255, 0.9);
+            color: #2c3e50;
+            padding: 15px;
+            border-radius: 10px;
+            font-weight: 500;
+            text-align: center;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+            transition: transform 0.2s ease;
+        }
+
+        .allocation .block,
+        .backtest .block {
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            backdrop-filter: blur(10px);
+        }
+
+        .block:hover {
+            transform: scale(1.05);
+        }
+
+        .arrow {
+            font-size: 2.5em;
+            color: #3498db;
+            text-align: center;
+            margin: 10px 0;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 0.6; }
+            50% { opacity: 1; }
+        }
+
+        .data-flow {
+            position: absolute;
+            right: 20px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: rgba(52, 152, 219, 0.8);
+            color: white;
+            padding: 8px 12px;
+            border-radius: 20px;
+            font-size: 0.8em;
+            font-weight: bold;
+        }
+
+        .tech-details {
+            font-size: 0.9em;
+            color: #555;
+            margin-top: 10px;
+            font-style: italic;
+        }
+
+        .allocation .tech-details,
+        .backtest .tech-details {
+            color: rgba(255, 255, 255, 0.8);
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 20px;
+            }
+            
+            .title {
+                font-size: 2em;
+            }
+            
+            .stage {
+                padding: 20px;
+            }
+            
+            .blocks {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="title">📊 Trading System Block Diagram</div>
+        
+        <div class="diagram">
+            <!-- Ingestion Stage -->
+            <div class="stage ingestion">
+                <div class="stage-title">🔄 Data Ingestion</div>
+                <div class="blocks">
+                    <div class="block">
+                        <strong>CSV/Parquet/DB</strong>
+                        <div class="tech-details">Concatenated OHLC data for all scrips</div>
+                    </div>
+                    <div class="block">
+                        <strong>scrip_extractor()</strong>
+                        <div class="tech-details">Converts to per-scrip DataFrames</div>
+                    </div>
+                </div>
+                <div class="data-flow">Raw Market Data</div>
+            </div>
+
+            <div class="arrow">⬇️</div>
+
+            <!-- Indicators Stage -->
+            <div class="stage indicators">
+                <div class="stage-title">📈 Technical Indicators</div>
+                <div class="blocks">
+                    <div class="block">
+                        <strong>compute_indicators_helper.py</strong>
+                        <div class="tech-details">EMA • RSI • MACD • Bollinger Bands</div>
+                    </div>
+                    <div class="block">
+                        <strong>Advanced Indicators</strong>
+                        <div class="tech-details">ROC • VWAP • ADX • ATR • Supertrend</div>
+                    </div>
+                </div>
+                <div class="data-flow">Enhanced Data</div>
+            </div>
+
+            <div class="arrow">⬇️</div>
+
+            <!-- Screening Stage -->
+            <div class="stage screening">
+                <div class="stage-title">🎯 Signal Generation</div>
+                <div class="blocks">
+                    <div class="block">
+                        <strong>updated_filters.py</strong>
+                        <div class="tech-details">Buy/Sell boolean signals</div>
+                    </div>
+                    <div class="block">
+                        <strong>Quality Rules</strong>
+                        <div class="tech-details">Min counts • Recency • Quality checks</div>
+                    </div>
+                </div>
+                <div class="data-flow">Trading Signals</div>
+            </div>
+
+            <div class="arrow">⬇️</div>
+
+            <!-- Allocation Stage -->
+            <div class="stage allocation">
+                <div class="stage-title">⚖️ Portfolio Allocation</div>
+                <div class="blocks">
+                    <div class="block">
+                        <strong>Scrip Scoring</strong>
+                        <div class="tech-details">Score each scrip based on signals</div>
+                    </div>
+                    <div class="block">
+                        <strong>Ranking System</strong>
+                        <div class="tech-details">Rank + Exponential Decay weighting</div>
+                    </div>
+                    <div class="block">
+                        <strong>Position Sizing</strong>
+                        <div class="tech-details">Clamp min/max • Normalize to 100%</div>
+                    </div>
+                </div>
+                <div class="data-flow">Portfolio Weights</div>
+            </div>
+
+            <div class="arrow">⬇️</div>
+
+            <!-- Backtest Stage -->
+            <div class="stage backtest">
+                <div class="stage-title">🔬 Backtesting Engine</div>
+                <div class="blocks">
+                    <div class="block">
+                        <strong>Trade Execution</strong>
+                        <div class="tech-details">Per-scrip trades from allocated cash</div>
+                    </div>
+                    <div class="block">
+                        <strong>Entry/Exit Logic</strong>
+                        <div class="tech-details">Buy signals • Sell signals • Holding periods</div>
+                    </div>
+                    <div class="block">
+                        <strong>P&L Calculation</strong>
+                        <div class="tech-details">Fees • Profit % • Transaction ledger</div>
+                    </div>
+                </div>
+                <div class="data-flow">Trade Results</div>
+            </div>
+
+            <div class="arrow">⬇️</div>
+
+            <!-- Outputs Stage -->
+            <div class="stage outputs">
+                <div class="stage-title">📊 Results & Reporting</div>
+                <div class="blocks">
+                    <div class="block">
+                        <strong>Portfolio Aggregation</strong>
+                        <div class="tech-details">Cash positions • P&L • Performance metrics</div>
+                    </div>
+                    <div class="block">
+                        <strong>Interactive Dashboard</strong>
+                        <div class="tech-details">streamlit_dashboard.py</div>
+                    </div>
+                    <div class="block">
+                        <strong>Excel Reports</strong>
+                        <div class="tech-details">Detailed analysis & data export</div>
+                    </div>
+                    <div class="block">
+                        <strong>HTML Export</strong>
+                        <div class="tech-details">Web-ready reports</div>
+                    </div>
+                </div>
+                <div class="data-flow">Final Output</div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

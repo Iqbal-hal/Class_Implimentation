@@ -1,0 +1,35 @@
+digraph G {
+  graph [
+    label="Legend - Details for Blocks 1-4 (v2)",
+    labelloc="t",
+    fontsize=18,
+    fontname="Helvetica",
+    bgcolor="white",
+    rankdir=TB,
+    size="8.27,11.69!",
+    ratio=compress,
+    margin=0.40,
+    nodesep="0.20",
+    ranksep="0.35"
+  ];
+
+  node [
+    shape=box,
+    style="rounded,filled",
+    fontname="Helvetica",
+    fontsize=12,
+    color="#1f2937",
+    fillcolor="white",
+    penwidth=1.1
+  ];
+
+  L1 [label="1  Input Data\n\nFile: Enhanced_stock_trading_V8.py\nRole: Read and prepare master OHLC DataFrame for multiple scrips.\nColumns: Date, Stock, Open, High, Low, Close, Volume.\nNotes: Concatenated multi-scrip input expected.", fillcolor="#eef2ff"];
+
+  L2 [label="2  Per-scrip Split\n\nFile: Enhanced_stock_trading_V8.py\nFunction: scrip_extractor(master_df)\nRole: Slice master DataFrame into per-scrip DataFrames.\nUsed in: apply_filter() to iterate scrip frames.", fillcolor="#e0f2fe"];
+
+  L3 [label="3  Indicators\n\nFile: compute_indicators_helper.py\nFunction: compute_indicators(df)\nAdds: EMA(9..200), RSI, MACD, Bollinger Bands, ROC,\n      60-day High/Low, VWAP, ADX and DI, ATR, Supertrend.\nContract: returns df with indicator columns appended.", fillcolor="#dcfce7"];
+
+  L4 [label="4  Signals\n\nFiles: updated_config.py (ACTIVE_FILTER, AVAILABLE_FILTERS)\n       updated_filters.py (e.g., filter_breakout, filter_mean_reversion, filter_adx)\nRole: Select filter by name; compute Buy and Sell boolean columns.", fillcolor="#fef9c3"];
+
+  L1 -> L2 -> L3 -> L4 [style=invis]; // keep vertical order
+}

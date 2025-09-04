@@ -1,0 +1,57 @@
+digraph G {
+  graph [
+    label="Stock Analysis - End-to-End Flow (v2)",
+    labelloc="t",
+    fontsize=20,
+    fontname="Helvetica",
+    bgcolor="white",
+    rankdir=TB,
+    size="8.27,11.69!",
+    ratio=compress,
+    margin=0.25,
+    nodesep="0.35",
+    ranksep="0.60",
+    splines=spline
+  ];
+
+  node [
+    shape=box,
+    style="rounded,filled",
+    fontname="Helvetica",
+    fontsize=13,
+    color="#1f2937",
+    fillcolor="#f8fafc",
+    penwidth=1.2
+  ];
+
+  edge [
+    color="#4b5563",
+    penwidth=1.1,
+    arrowsize=0.7
+  ];
+
+  A [label="1  Input Data",            fillcolor="#eef2ff"];
+  B [label="2  Per-scrip Split",       fillcolor="#e0f2fe"];
+  C [label="3  Indicators",            fillcolor="#dcfce7"];
+  D [label="4  Signals",               fillcolor="#fef9c3"];
+  E [label="5  Screening",             fillcolor="#ffedd5"];
+  F [label="6  Portfolio Allocation",  fillcolor="#dbeafe"];
+  G [label="7  Backtesting",           fillcolor="#fde68a"];
+  H [label="8  Aggregate Portfolio",   fillcolor="#f1f5f9"];
+  I [label="9  Dashboard",             fillcolor="#e2e8f0"];
+  J [label="10 Reports",               fillcolor="#e2e8f0"];
+
+  A -> B -> C -> D -> E -> F -> G -> H;
+  { rank=same; I; J }
+  H -> I;
+  H -> J;
+
+  // subtle pointers to legend pages (no arrows drawn on print)
+  note1 [shape=note, label="See Legend Page 1: Blocks 1-4", fontsize=11, color="#64748b", fillcolor="#f8fafc"];
+  note2 [shape=note, label="See Legend Page 2: Blocks 5-8", fontsize=11, color="#64748b", fillcolor="#f8fafc"];
+  note3 [shape=note, label="See Legend Page 3: Blocks 9-10 and Notes", fontsize=11, color="#64748b", fillcolor="#f8fafc"];
+
+  A -> note1 [style=dotted, arrowhead=none, color="#94a3b8"];
+  E -> note2 [style=dotted, arrowhead=none, color="#94a3b8"];
+  I -> note3 [style=dotted, arrowhead=none, color="#94a3b8"];
+}

@@ -1,0 +1,107 @@
+digraph G {
+  // ==== Page & layout (A4 portrait, compact, readable) ====
+  graph [
+    label="Stock Analysis — End-to-End Flow",
+    labelloc="t",
+    fontsize=20,
+    fontname="Helvetica",
+    bgcolor="white",
+    rankdir=TB,                 // top -> bottom for A4 portrait
+    size="8.27,11.69!",         // A4 in inches, force fit
+    ratio=compress,             // compress to use space efficiently
+    margin=0.15,
+    nodesep="0.35",
+    ranksep="0.5",
+    splines=spline,
+    concentrate=true,
+    newrank=true
+  ];
+
+  node [
+    shape=box,
+    style="rounded,filled",
+    fontname="Helvetica",
+    fontsize=12,
+    color="#1f2937",
+    fillcolor="#f8fafc",
+    penwidth=1.2
+  ];
+
+  edge [
+    color="#4b5563",
+    penwidth=1.1,
+    arrowsize=0.7
+  ];
+
+  // ==== Main flow (kept concise so the page stays clean) ====
+  A [label="Input Data\nConcatenated OHLC (multiple scrips)", fillcolor="#eef2ff"]; // indigo-50
+  B [label="scrip_extractor()\nSplit per scrip", fillcolor="#e0f2fe"];               // sky-100
+  C [label="compute_indicators_helper\nAdd technical indicators", fillcolor="#dcfce7"]; // green-100
+  D [label="updated_filters (ACTIVE_FILTER)\nBuy/Sell Signals", fillcolor="#fef9c3"];  // yellow-100
+  E [label="Screening\nEligible scrips", fillcolor="#ffedd5"];                         // orange-100
+  F [label="Portfolio Allocation\nScores → Weights → ₹ Allocation", fillcolor="#dbeafe"]; // blue-100
+  G [label="Backtesting\nRules + Fees + Ledger", fillcolor="#fde68a"];                 // amber-200
+  H [label="Aggregate Portfolio\nCash · P&L · Metrics", fillcolor="#f1f5f9"];          // slate-100
+  I [label="Dashboard (Streamlit + Plotly)", fillcolor="#e2e8f0"];                     // gray-200
+  J [label="Reports (Excel / HTML)", fillcolor="#e2e8f0"];                              // gray-200
+
+  // Keep outputs on same row for symmetry
+  { rank=same; I; J }
+
+  // Flow arrows
+  A -> B -> C -> D -> E -> F -> G -> H;
+  H -> I;
+  H -> J;
+
+  // ==== Compact detail clusters (colored but lightweight) ====
+
+  // Indicators cluster
+  subgraph cluster_ind {
+    label="Technical Indicators";
+    labelloc="t";
+    fontsize=13;
+    fontname="Helvetica";
+    color="#86efac";            // green outline
+    style="rounded,filled";
+    fillcolor="#f0fdf4";        // green-50
+
+    Ic [label="EMA(9…200) · RSI · MACD · BB · ROC\n60-day High/Low · VWAP · ADX/±DI · ATR · Supertrend",
+        fillcolor="white", color="#16a34a", fontsize=11];
+  }
+  C -> Ic [color="#16a34a"];
+
+  // Allocation cluster
+  subgraph cluster_alloc {
+    label="Allocation Logic";
+    labelloc="t";
+    fontsize=13;
+    fontname="Helvetica";
+    color="#93c5fd";            // blue outline
+    style="rounded,filled";
+    fillcolor="#eff6ff";        // blue-50
+
+    A1 [label="Score = Tech (RSI/MACD/SMA) + Signal Quality\n+ Momentum + (Low) Volatility", fillcolor="white", color="#2563eb", fontsize=11];
+    A2 [label="Rank → Exponential Decay Weights", fillcolor="white", color="#2563eb", fontsize=11];
+    A3 [label="Clamp per-position (min/max)\nNormalize → 100%", fillcolor="white", color="#2563eb", fontsize=11];
+    A1 -> A2 -> A3 [color="#2563eb"];
+  }
+  F -> A1 [color="#2563eb"];
+
+  // Backtesting cluster
+  subgraph cluster_bt {
+    label="Backtesting Rules";
+    labelloc="t";
+    fontsize=13;
+    fontname="Helvetica";
+    color="#facc15";            // amber outline
+    style="rounded,filled";
+    fillcolor="#fffbeb";        // amber-50
+
+    B1 [label="Entry: Buy when Buy-signal & flat", fillcolor="white", color="#d97706", fontsize=11];
+    B2 [label="Exit: Sell when Sell-signal &\n(min holding days & min profit hit)", fillcolor="white", color="#d97706", fontsize=11];
+    B3 [label="Brokerage fees", fillcolor="white", color="#d97706", fontsize=11];
+    B4 [label="Transaction ledger", fillcolor="white", color="#d97706", fontsize=11];
+    B1 -> B2 -> B3 -> B4 [color="#d97706"];
+  }
+  G -> B1 [color="#d97706"];
+}
